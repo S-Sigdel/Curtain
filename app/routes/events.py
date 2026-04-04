@@ -66,8 +66,8 @@ def _validate_create_payload(payload):
     if "user_id" in payload and payload["user_id"] is not None and not isinstance(payload["user_id"], int):
         return "Field 'user_id' must be an integer"
 
-    if "details" in payload and payload["details"] is not None and not isinstance(payload["details"], (dict, list, str, int, float, bool)):
-        return "Field 'details' must be JSON-serializable"
+    if "details" in payload and payload["details"] is not None and not isinstance(payload["details"], dict):
+        return "Field 'details' must be a JSON object"
 
     return None
 

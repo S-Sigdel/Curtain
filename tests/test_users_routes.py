@@ -113,6 +113,16 @@ def test_update_user_updates_requested_fields(integration_client):
     }
 
 
+def test_create_user_rejects_invalid_email_format(integration_client):
+    response = integration_client.post(
+        "/users",
+        json={"username": "badactor", "email": "notanemail"},
+    )
+
+    assert response.status_code == 422
+    assert "email" in response.get_json()["errors"]
+
+
 def test_create_user_rejects_duplicate_email(integration_client):
     User.create(
         username="first",

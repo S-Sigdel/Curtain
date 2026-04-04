@@ -45,6 +45,16 @@ def test_list_events_returns_serialized_events(integration_client):
     ]
 
 
+def test_create_event_rejects_non_object_details(client):
+    response = client.post(
+        "/events",
+        json={"url_id": 1, "event_type": "click", "details": "just a string"},
+    )
+
+    assert response.status_code == 400
+    assert "details" in response.get_json()["error"].lower()
+
+
 def test_create_event_creates_row_and_returns_payload(integration_client):
     now = datetime(2026, 1, 1, 0, 0, 0)
     user = User.create(

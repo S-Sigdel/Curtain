@@ -41,6 +41,11 @@ def _validate_user_payload(payload, partial=False):
         if not value.strip():
             return field, f"Field '{field}' must not be empty"
 
+    if "email" in payload and isinstance(payload["email"], str):
+        email = payload["email"].strip()
+        if "@" not in email or "." not in email.split("@")[-1]:
+            return "email", "Field 'email' must be a valid email address"
+
     return None, None
 
 
