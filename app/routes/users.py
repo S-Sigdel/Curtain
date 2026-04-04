@@ -57,6 +57,9 @@ def _parse_created_at(value):
 
 
 def _sync_user_sequence():
+    if db.obj is None or "postgres" not in db.obj.__class__.__name__.lower():
+        return
+
     db.execute_sql(
         "SELECT setval(%s, COALESCE((SELECT MAX(id) FROM users), 1), true)",
         ("users_id_seq",),

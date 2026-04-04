@@ -93,6 +93,21 @@ docker compose exec app uv sync --dev
 docker compose exec app uv run pytest -q
 ```
 
+## Observability
+
+Structured application logs are emitted as JSON, and Prometheus-compatible metrics are exposed at `/metrics`.
+
+Quick checks:
+
+```bash
+curl http://localhost:5000/metrics
+docker compose logs -f app
+docker compose logs -f app2
+docker compose logs -f nginx
+```
+
+The metrics page includes request counters, request latency, process CPU time, and process memory usage. Log lines include timestamps, levels, request path, status code, and request duration.
+
 ## Scaling Verification
 
 The Docker stack runs two app containers behind Nginx:
@@ -163,6 +178,7 @@ Detailed behavior docs:
 - [docs/ERROR_HANDELING.md](./docs/ERROR_HANDELING.md)
 - [docs/FAILURE_MODES.md](./docs/FAILURE_MODES.md)
 - [docs/LOAD_TESTING.md](./docs/LOAD_TESTING.md)
+- [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md)
 - [REDIS_INFO.md](./REDIS_INFO.md)
 
 Current API highlights:

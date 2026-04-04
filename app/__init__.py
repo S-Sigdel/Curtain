@@ -1,7 +1,8 @@
 from dotenv import load_dotenv
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 from app.database import init_db
+from app.observability import configure_json_logging, init_metrics
 from app.routes import register_routes
 
 
@@ -9,6 +10,8 @@ def create_app(init_database=True):
     load_dotenv()
 
     app = Flask(__name__)
+    configure_json_logging(app)
+    init_metrics(app)
 
     if init_database:
         init_db(app)
@@ -26,7 +29,11 @@ def create_app(init_database=True):
         return jsonify(error="Not found"), 404
 
     @app.errorhandler(500)
-    def internal_server_error(_error):
+    def internal_server_error(error):
+        app.logger.exception(
+            "request.failed",
+            extra={"component": "http", "path": request.path},
+        )
         return jsonify(error="Internal server error"), 500
 
     return app
