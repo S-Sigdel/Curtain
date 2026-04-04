@@ -1,6 +1,6 @@
 # Incident Response
 
-This document describes the Silver-tier monitoring and alerting setup.
+This document describes the monitoring stack that supports an alert being sent to discord and an grafana dashboard.
 
 ## Stack
 
@@ -9,12 +9,14 @@ The incident-response stack adds:
 - Prometheus for metric scraping and alert evaluation
 - a notifier service that polls Prometheus firing alerts every 15 seconds
 - a small Discord relay service that converts internal alert webhooks into Discord webhook posts
+- Grafana for the visual command-center dashboard
 
 Services are defined in [docker-compose.yml](/home/pacific/Programming/hackathons/Curtain/docker-compose.yml).
 
 ## Endpoints
 
 - Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000`
 - Manual relay test: `http://localhost:8080/alert`
 - App metrics: `http://localhost:5000/metrics`
 - Public health check: `http://localhost:5000/health`
@@ -45,6 +47,9 @@ Relevant files:
 
 - [monitoring/prometheus_notifier.py](/home/pacific/Programming/hackathons/Curtain/monitoring/prometheus_notifier.py)
 - [monitoring/discord_webhook_relay.py](/home/pacific/Programming/hackathons/Curtain/monitoring/discord_webhook_relay.py)
+- [monitoring/grafana/dashboards/curtain-command-center.json](/home/pacific/Programming/hackathons/Curtain/monitoring/grafana/dashboards/curtain-command-center.json)
+- [docs/RUNBOOK.md](/home/pacific/Programming/hackathons/Curtain/docs/RUNBOOK.md)
+- [docs/SHERLOCK_MODE.md](/home/pacific/Programming/hackathons/Curtain/docs/SHERLOCK_MODE.md)
 
 ## Fire Drill
 

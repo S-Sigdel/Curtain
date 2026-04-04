@@ -110,12 +110,13 @@ The metrics page includes request counters, request latency, process CPU time, a
 
 ## Incident Response
 
-The Docker stack also includes a Silver-tier monitoring path:
+The Docker stack also includes Silver and Gold incident-response tooling:
 
 - Prometheus on `http://localhost:9090`
 - Prometheus notifier polling Prometheus alerts every 15 seconds
 - Discord notifications via `DISCORD_WEBHOOK_URL`
 - Manual relay test endpoint on `http://localhost:8080/alert`
+- Grafana on `http://localhost:3000`
 
 Set `DISCORD_WEBHOOK_URL` in `.env`, then start the full stack:
 
@@ -127,6 +128,12 @@ Alert rules included:
 
 - `CurtainServiceDown`
 - `CurtainHighErrorRate`
+
+command-center assets:
+
+- Grafana dashboard provisioning in [monitoring/grafana/dashboards/curtain-command-center.json](./monitoring/grafana/dashboards/curtain-command-center.json)
+- 3 AM runbook in [docs/RUNBOOK.md](./docs/RUNBOOK.md)
+- incident diagnosis walkthrough in [docs/SHERLOCK_MODE.md](./docs/SHERLOCK_MODE.md)
 
 Fire-drill commands:
 
@@ -218,6 +225,8 @@ Detailed behavior docs:
 - [docs/INCIDENT_RESPONSE.md](./docs/INCIDENT_RESPONSE.md)
 - [docs/LOAD_TESTING.md](./docs/LOAD_TESTING.md)
 - [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md)
+- [docs/RUNBOOK.md](./docs/RUNBOOK.md)
+- [docs/SHERLOCK_MODE.md](./docs/SHERLOCK_MODE.md)
 - [REDIS_INFO.md](./REDIS_INFO.md)
 
 Current API highlights:
