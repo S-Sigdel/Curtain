@@ -1,0 +1,25 @@
+groups:
+  - name: curtain-incident-response
+    rules:
+      - alert: CurtainServiceDown
+        expr: sum(up{job="curtain-app"}) < 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Curtain service is down
+          description: Prometheus has not been able to scrape any Curtain app instance for at least 1 minute.
+
+      - alert: CurtainHighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{job="curtain-app",status_code=~"5.."}[2m]))
+            /
+            clamp_min(sum(rate(http_requests_total{job="curtain-app"}[2m])), 1)
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Curtain high error rate
+          description: 5xx responses have exceeded 5 percent for at least 2 minutes.

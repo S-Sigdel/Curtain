@@ -1,3 +1,5 @@
+import os
+
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 
@@ -23,6 +25,12 @@ def create_app(init_database=True):
     @app.route("/health")
     def health():
         return jsonify(status="ok")
+
+    @app.route("/debug/fail")
+    def debug_fail():
+        if os.environ.get("ENABLE_INCIDENT_DEBUG_ROUTES", "false").lower() != "true":
+            return jsonify(error="Not found"), 404
+        raise RuntimeError("Intentional failure for incident-response drill")
 
     @app.errorhandler(404)
     def not_found(_error):

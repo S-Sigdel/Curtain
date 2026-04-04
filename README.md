@@ -108,6 +108,44 @@ docker compose logs -f nginx
 
 The metrics page includes request counters, request latency, process CPU time, and process memory usage. Log lines include timestamps, levels, request path, status code, and request duration.
 
+## Incident Response
+
+The Docker stack also includes a Silver-tier monitoring path:
+
+- Prometheus on `http://localhost:9090`
+- Prometheus notifier polling Prometheus alerts every 15 seconds
+- Discord notifications via `DISCORD_WEBHOOK_URL`
+- Manual relay test endpoint on `http://localhost:8080/alert`
+
+Set `DISCORD_WEBHOOK_URL` in `.env`, then start the full stack:
+
+```bash
+docker compose up --build -d
+```
+
+Alert rules included:
+
+- `CurtainServiceDown`
+- `CurtainHighErrorRate`
+
+Fire-drill commands:
+
+```bash
+# Service-down drill
+docker compose stop app app2
+
+# High-error-rate drill
+docker compose up -d --force-recreate app app2 nginx
+docker run --rm \
+  --network curtain_default \
+  -e BASE_URL=http://nginx \
+  -v "$PWD/loadtests:/loadtests" \
+  grafana/k6 run /loadtests/errorRateTest.js
+```
+
+The debug failure route used by `errorRateTest.js` is disabled by default and only returns `500` when `ENABLE_INCIDENT_DEBUG_ROUTES=true`.
+If you change that flag in `.env`, recreate `app`, `app2`, and `nginx` before running the drill.
+
 ## Scaling Verification
 
 The Docker stack runs two app containers behind Nginx:
@@ -177,6 +215,7 @@ Detailed behavior docs:
 - [docs/API_EXAMPLES.md](./docs/API_EXAMPLES.md)
 - [docs/ERROR_HANDELING.md](./docs/ERROR_HANDELING.md)
 - [docs/FAILURE_MODES.md](./docs/FAILURE_MODES.md)
+- [docs/INCIDENT_RESPONSE.md](./docs/INCIDENT_RESPONSE.md)
 - [docs/LOAD_TESTING.md](./docs/LOAD_TESTING.md)
 - [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md)
 - [REDIS_INFO.md](./REDIS_INFO.md)

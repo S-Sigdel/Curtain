@@ -19,6 +19,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/hackathon_db
       REDIS_URL: redis://redis:6379/0
       CACHE_REDIS_URL: redis://redis_cache:6379/0
+      ENABLE_INCIDENT_DEBUG_ROUTES: ${ENABLE_INCIDENT_DEBUG_ROUTES:-false}
     volumes:
       - .:/app
     command: uv run gunicorn -c gunicorn.conf.py run:app
@@ -41,6 +42,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/hackathon_db
       REDIS_URL: redis://redis:6379/0
       CACHE_REDIS_URL: redis://redis_cache:6379/0
+      ENABLE_INCIDENT_DEBUG_ROUTES: ${ENABLE_INCIDENT_DEBUG_ROUTES:-false}
     volumes:
       - .:/app
     command: uv run gunicorn -c gunicorn.conf.py run:app
@@ -56,6 +58,44 @@ services:
       - "5000:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    platform: linux/amd64
+    user: "0:0"
+    depends_on:
+      app:
+        condition: service_started
+      app2:
+        condition: service_started
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+
+  notifier:
+    build:
+      context: .
+    depends_on:
+      prometheus:
+        condition: service_started
+      discord_relay:
+        condition: service_started
+    environment:
+      PROMETHEUS_URL: http://prometheus:9090
+      NOTIFIER_WEBHOOK_URL: http://discord_relay:8080/alert
+      NOTIFIER_POLL_SECONDS: "15"
+    command: uv run python monitoring/prometheus_notifier.py
+
+  discord_relay:
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    environment:
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL}
+    command: uv run python monitoring/discord_webhook_relay.py
 
   db:
     image: postgres:16

@@ -8,9 +8,9 @@ The project separates Redis responsibilities:
 
 Relevant files:
 
-- [app/redis_client.py](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/app/redis_client.py)
-- [app/services/url_shortener.py](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/app/services/url_shortener.py)
-- [app/cache.py](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/app/cache.py)
+- [app/redis_client.py](/home/pacific/Programming/hackathons/Curtain/app/redis_client.py)
+- [app/services/url_shortener.py](/home/pacific/Programming/hackathons/Curtain/app/services/url_shortener.py)
+- [app/cache.py](/home/pacific/Programming/hackathons/Curtain/app/cache.py)
 
 Current service split:
 

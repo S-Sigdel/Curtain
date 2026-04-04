@@ -21,7 +21,7 @@ Each app container runs:
 
 The baseline `k6` script is:
 
-- [loadtests/loadTest.js](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/loadtests/loadTest.js)
+- [loadtests/loadTest.js](/home/pacific/Programming/hackathons/Curtain/loadtests/loadTest.js)
 
 It simulates:
 
@@ -37,9 +37,9 @@ Important:
 
 Additional real-flow scripts are also available:
 
-- [loadtests/redirectTest.js](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/loadtests/redirectTest.js)
-- [loadtests/shortenTest.js](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/loadtests/shortenTest.js)
-- [loadtests/highReadTest.js](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/loadtests/highReadTest.js)
+- [loadtests/redirectTest.js](/home/pacific/Programming/hackathons/Curtain/loadtests/redirectTest.js)
+- [loadtests/shortenTest.js](/home/pacific/Programming/hackathons/Curtain/loadtests/shortenTest.js)
+- [loadtests/highReadTest.js](/home/pacific/Programming/hackathons/Curtain/loadtests/highReadTest.js)
 
 ## Run With Docker
 
