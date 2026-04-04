@@ -143,24 +143,23 @@ def create_user():
     if message is not None:
         return _validation_error(field, message)
 
+    email = payload["email"].strip()
+    if User.get_or_none(User.email == email) is not None:
+        return _validation_error("email", "Field 'email' must be unique")
+
     try:
         user = User.create(
             username=payload["username"].strip(),
-            email=payload["email"].strip(),
+            email=email,
             created_at=datetime.now(UTC).replace(tzinfo=None),
         )
-    except IntegrityError as exc:
-        if "email" in str(exc).lower() or "unique" in str(exc).lower():
-            return _validation_error("email", "Field 'email' must be unique")
+    except IntegrityError:
         _sync_user_sequence()
-        try:
-            user = User.create(
-                username=payload["username"].strip(),
-                email=payload["email"].strip(),
-                created_at=datetime.now(UTC).replace(tzinfo=None),
-            )
-        except IntegrityError:
-            return _validation_error("email", "Field 'email' must be unique")
+        user = User.create(
+            username=payload["username"].strip(),
+            email=email,
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+        )
     return jsonify(_serialize_user(user)), 201
 
 
