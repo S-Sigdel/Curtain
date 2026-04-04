@@ -14,6 +14,8 @@ from app.cache import (
     url_list_cache_key,
 )
 from app.models import Event, Url
+from app.redis_client import get_shard_ring
+from app.services.click_counter import record_click
 from app.services.url_shortener import get_or_create_short_url
 
 url_shortener_bp = Blueprint("url_shortener", __name__)
@@ -261,5 +263,11 @@ def redirect_short_code(short_code):
     if url is None:
         return jsonify(error="URL not found"), 404
 
+    # Fast path: increment sharded Redis counter + write to stream.
+    # record_click never raises — redirect succeeds even if all shards are down.
+    visitor_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or ""
+    record_click(short_code, visitor_ip, get_shard_ring())
+
+    # TODO(phase-4): remove once stream consumer handles PG event writes.
     _record_event(url, "redirect", details={"short_code": short_code})
     return redirect(url.original_url, code=302)

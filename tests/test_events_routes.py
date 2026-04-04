@@ -1,6 +1,9 @@
 from datetime import datetime
+from unittest.mock import patch
 
 from app.models import Event, Url, User
+
+_ZERO_REALTIME = {"total_clicks": 0, "unique_visitors": 0, "hourly": {}}
 
 
 def test_list_events_returns_serialized_events(integration_client):
@@ -175,22 +178,21 @@ def test_url_analytics_returns_event_counts(integration_client):
         ]
     ).execute()
 
-    response = integration_client.get(f"/urls/{url.id}/analytics")
+    with patch("app.routes.events.get_click_stats", return_value=_ZERO_REALTIME), \
+         patch("app.routes.events.get_cached_json", return_value=None):
+        response = integration_client.get(f"/urls/{url.id}/analytics")
 
     assert response.status_code == 200
-    assert response.get_json() == {
-        "url_id": url.id,
-        "short_code": "abc123",
-        "original_url": "https://example.com/1",
-        "total_events": 3,
-        "click_count": 0,
-        "redirect_count": 0,
-        "event_counts": {
-            "created": 1,
-            "updated": 2,
-        },
-        "latest_event_at": "2026-01-01T02:00:00",
-    }
+    body = response.get_json()
+    assert body["url_id"] == url.id
+    assert body["short_code"] == "abc123"
+    assert body["original_url"] == "https://example.com/1"
+    assert body["total_events"] == 3
+    assert body["click_count"] == 0
+    assert body["redirect_count"] == 0
+    assert body["event_counts"] == {"created": 1, "updated": 2}
+    assert body["latest_event_at"] == "2026-01-01T02:00:00"
+    assert body["realtime"] == _ZERO_REALTIME
 
 
 def test_url_analytics_returns_404_for_missing_url(integration_client):

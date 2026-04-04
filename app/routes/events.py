@@ -12,6 +12,8 @@ from app.cache import (
     url_analytics_cache_key,
 )
 from app.models import Event, Url, User
+from app.redis_client import get_shard_ring
+from app.services.click_counter import get_click_stats
 
 events_bp = Blueprint("events", __name__)
 
@@ -149,6 +151,8 @@ def get_url_analytics(url_id):
 
     latest_event_at = events[-1].timestamp.isoformat(timespec="seconds") if events else None
 
+    realtime = get_click_stats(url.short_code, get_shard_ring())
+
     payload = {
         "url_id": url.id,
         "short_code": url.short_code,
@@ -158,6 +162,7 @@ def get_url_analytics(url_id):
         "redirect_count": event_counts.get("redirect", 0),
         "event_counts": event_counts,
         "latest_event_at": latest_event_at,
+        "realtime": realtime,
     }
     set_cached_json(cache_key, payload, URL_ANALYTICS_TTL_SECONDS)
     return _json_response(payload, cache_status="MISS")
