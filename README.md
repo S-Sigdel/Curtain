@@ -108,7 +108,12 @@ docker compose ps
 docker ps
 ```
 
-Run the 200-user baseline load test through Nginx:
+You should see:
+
+- 2 app containers: `curtain-app-1` and `curtain-app2-1`
+- 1 Nginx container: `curtain-nginx-1`
+
+Run the 200-concurrent-user baseline load test through Nginx:
 
 ```bash
 docker run --rm \
@@ -117,6 +122,16 @@ docker run --rm \
   -v "$PWD/loadtests:/loadtests" \
   grafana/k6 run /loadtests/loadTest.js
 ```
+
+This script uses `constant-vus` with `vus: 200`, so it simulates 200 concurrent users for 30 seconds. It does not cap the test at a fixed 200 requests per second. The actual requests per second depend on latency and the script body.
+
+Pass criteria:
+
+- 2 app containers are running
+- 1 Nginx container is running in front of them
+- the k6 run completes with 200 concurrent users
+- `http_req_duration` satisfies `p(95)<3000`
+- `http_req_failed` satisfies `rate<0.05`
 
 CI runs the same pytest suite on every push and pull request via [.github/workflows/tests.yml](./.github/workflows/tests.yml).
 

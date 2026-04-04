@@ -17,7 +17,7 @@ Each app container runs:
 - bound to `0.0.0.0:5000`
 - `FLASK_DEBUG=false`
 
-## Bronze Load Test
+## Silver Baseline Load Test
 
 The baseline `k6` script is:
 
@@ -28,6 +28,12 @@ It simulates:
 - 200 concurrent virtual users
 - 30 seconds of sustained traffic
 - requests against `GET /health` through Nginx
+
+Important:
+
+- `vus: 200` means 200 concurrent users
+- it does not mean a fixed rate of 200 requests per second
+- actual requests per second depend on response time and script timing
 
 Additional real-flow scripts are also available:
 
