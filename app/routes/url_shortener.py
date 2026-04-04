@@ -1,4 +1,5 @@
 from datetime import datetime
+from urllib.parse import urlparse
 
 from flask import Blueprint, jsonify, redirect, request
 from peewee import IntegrityError
@@ -8,6 +9,11 @@ from app.models import Url
 from app.services.url_shortener import generate_next_short_code
 
 url_shortener_bp = Blueprint("url_shortener", __name__)
+
+
+def _is_valid_long_url(value):
+    parsed = urlparse(value)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
 @url_shortener_bp.route("/apis/url/shorten", methods=["POST"])
@@ -20,6 +26,14 @@ def shorten_url():
 
     if not long_url:
         return jsonify(error="Field 'long_url' is required"), 400
+    if not _is_valid_long_url(long_url):
+        return jsonify(error="Field 'long_url' must be a valid http or https URL"), 400
+
+    existing_mapping = Url.get_or_none(
+        (Url.original_url == long_url) & (Url.is_active == True)
+    )
+    if existing_mapping is not None:
+        return jsonify(short_url=existing_mapping.short_code), 200
 
     try:
         short_code = generate_next_short_code()
@@ -39,7 +53,10 @@ def shorten_url():
         )
         return jsonify(short_url=short_code), 201
     except IntegrityError as exc:
-        return jsonify(error=str(exc)), 400
+        error_message = str(exc).lower()
+        if "user_id" in error_message or "foreign key" in error_message:
+            return jsonify(error="Field 'user_id' must reference an existing user"), 400
+        return jsonify(error="Could not create short URL"), 400
 
 
 @url_shortener_bp.route("/apis/url/<shorturl>", methods=["GET"])

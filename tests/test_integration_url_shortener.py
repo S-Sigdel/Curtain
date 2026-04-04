@@ -62,7 +62,9 @@ def test_shorten_url_returns_400_for_invalid_user_id(integration_client, monkeyp
     )
 
     assert response.status_code == 400
-    assert "error" in response.get_json()
+    assert response.get_json() == {
+        "error": "Field 'user_id' must reference an existing user"
+    }
 
 
 def test_inactive_short_url_returns_json_404(integration_client):
@@ -80,3 +82,28 @@ def test_inactive_short_url_returns_json_404(integration_client):
 
     assert response.status_code == 404
     assert response.get_json() == {"error": "Short URL not found"}
+
+
+def test_shorten_url_reuses_existing_active_mapping(integration_client, monkeypatch):
+    now = datetime(2026, 1, 1, 0, 0, 0)
+    Url.create(
+        short_code="reuse01",
+        original_url="https://www.wikipedia.org/",
+        title="Existing",
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+    )
+
+    fake_redis = FakeRedis(start=50)
+    monkeypatch.setattr("app.services.url_shortener.get_redis", lambda: fake_redis)
+
+    response = integration_client.post(
+        "/apis/url/shorten",
+        json={"long_url": "https://www.wikipedia.org/"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"short_url": "reuse01"}
+    assert Url.select().where(Url.original_url == "https://www.wikipedia.org/").count() == 1
+    assert fake_redis.seeded is None
