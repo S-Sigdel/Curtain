@@ -10,6 +10,17 @@ def test_shorten_url_requires_long_url(client):
     assert response.get_json() == {"error": "Field 'long_url' is required"}
 
 
+def test_shorten_url_rejects_malformed_json(client):
+    response = client.post(
+        "/apis/url/shorten",
+        data='{"long_url": ',
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Field 'long_url' is required"}
+
+
 def test_shorten_url_returns_503_when_redis_is_unavailable(client, monkeypatch):
     def raise_redis_error():
         raise RedisError("redis unavailable")

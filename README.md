@@ -89,21 +89,12 @@ docker compose exec app uv run pytest --cov=app --cov-report=term-missing
 
 CI runs the same pytest suite on every push and pull request via [.github/workflows/tests.yml](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/.github/workflows/tests.yml).
 
-## Error Handling
+Detailed behavior docs:
 
-The app returns JSON error responses for the main failure cases:
+- [docs/API_EXAMPLES.md](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/docs/API_EXAMPLES.md)
+- [docs/ERROR_HANDELING.md](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/docs/ERROR_HANDELING.md)
+- [docs/FAILURE_MODES.md](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/docs/FAILURE_MODES.md)
 
-- `404 Not Found`
-Unknown routes return `{"error": "Not found"}`. Missing short URLs return `{"error": "Short URL not found"}`.
-
-- `400 Bad Request`
-Invalid shorten requests such as a missing `long_url` field return `{"error": "Field 'long_url' is required"}`. Database integrity failures during create also return `400`.
-
-- `500 Internal Server Error`
-Unhandled server exceptions return `{"error": "Internal server error"}`.
-
-- `503 Service Unavailable`
-If Redis is unavailable during short-code generation, the app returns `{"error": "Short URL generation is temporarily unavailable."}`.
 
 ## Project Structure
 
