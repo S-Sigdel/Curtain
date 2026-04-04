@@ -39,6 +39,7 @@ Additional real-flow scripts are also available:
 
 - [loadtests/redirectTest.js](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/loadtests/redirectTest.js)
 - [loadtests/shortenTest.js](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/loadtests/shortenTest.js)
+- [loadtests/highReadTest.js](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/loadtests/highReadTest.js)
 
 ## Run With Docker
 
@@ -46,6 +47,13 @@ Start the app stack first:
 
 ```bash
 docker compose up --build -d
+```
+
+For read-based load tests, seed the database first so `URL_ID=1` and related rows exist:
+
+```bash
+docker compose exec app uv run python scripts/reset_db.py
+docker compose exec app uv run python scripts/seed_csv.py
 ```
 
 Run the baseline:
@@ -100,3 +108,18 @@ docker run --rm \
   -v "$PWD/loadtests:/loadtests" \
   grafana/k6 run /loadtests/shortenTest.js
 ```
+
+## Cached URL Read Load Test
+
+This script stresses a hot `GET /urls/<id>` path with 500 concurrent users and checks that the cache evidence header is present.
+
+```bash
+docker run --rm \
+  --network curtain_default \
+  -e BASE_URL=http://nginx \
+  -e URL_ID=1 \
+  -v "$PWD/loadtests:/loadtests" \
+  grafana/k6 run /loadtests/highReadTest.js
+```
+
+If `URL_ID=1` does not exist, the test will fail its correctness checks even if the service is otherwise healthy.

@@ -24,7 +24,7 @@ def test_create_url_creates_a_database_row(integration_client, monkeypatch):
         email="owner@example.com",
         created_at=datetime(2026, 1, 1, 9, 0, 0),
     )
-    monkeypatch.setattr("app.services.url_shortener.get_redis", lambda: fake_redis)
+    monkeypatch.setattr("app.services.url_shortener.get_counter_redis", lambda: fake_redis)
 
     response = integration_client.post(
         "/urls",
@@ -60,7 +60,7 @@ def test_create_url_creates_a_database_row(integration_client, monkeypatch):
 
 def test_create_url_returns_400_for_invalid_user_id(integration_client, monkeypatch):
     fake_redis = FakeRedis(start=1)
-    monkeypatch.setattr("app.services.url_shortener.get_redis", lambda: fake_redis)
+    monkeypatch.setattr("app.services.url_shortener.get_counter_redis", lambda: fake_redis)
 
     response = integration_client.post(
         "/urls",
@@ -85,7 +85,7 @@ def test_create_url_reuses_existing_active_mapping(integration_client, monkeypat
     )
 
     fake_redis = FakeRedis(start=50)
-    monkeypatch.setattr("app.services.url_shortener.get_redis", lambda: fake_redis)
+    monkeypatch.setattr("app.services.url_shortener.get_counter_redis", lambda: fake_redis)
 
     response = integration_client.post(
         "/urls",

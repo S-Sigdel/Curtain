@@ -125,6 +125,15 @@ docker run --rm \
 
 This script uses `constant-vus` with `vus: 200`, so it simulates 200 concurrent users for 30 seconds. It does not cap the test at a fixed 200 requests per second. The actual requests per second depend on latency and the script body.
 
+For read-based load tests, make sure the database has data first. The simplest path is to reseed the database:
+
+```bash
+docker compose exec app uv run python scripts/reset_db.py
+docker compose exec app uv run python scripts/seed_csv.py
+```
+
+If you do not want to reseed, create a user and URL manually and use that URL id in the test command.
+
 Pass criteria:
 
 - 2 app containers are running
@@ -132,6 +141,19 @@ Pass criteria:
 - the k6 run completes with 200 concurrent users
 - `http_req_duration` satisfies `p(95)<3000`
 - `http_req_failed` satisfies `rate<0.05`
+
+For cache-heavy read verification, run:
+
+```bash
+docker run --rm \
+  --network curtain_default \
+  -e BASE_URL=http://nginx \
+  -e URL_ID=1 \
+  -v "$PWD/loadtests:/loadtests" \
+  grafana/k6 run /loadtests/highReadTest.js
+```
+
+`URL_ID=1` assumes a seeded database or another existing URL row with id `1`.
 
 CI runs the same pytest suite on every push and pull request via [.github/workflows/tests.yml](./.github/workflows/tests.yml).
 
@@ -141,6 +163,7 @@ Detailed behavior docs:
 - [docs/ERROR_HANDELING.md](./docs/ERROR_HANDELING.md)
 - [docs/FAILURE_MODES.md](./docs/FAILURE_MODES.md)
 - [docs/LOAD_TESTING.md](./docs/LOAD_TESTING.md)
+- [REDIS_INFO.md](./REDIS_INFO.md)
 
 Current API highlights:
 

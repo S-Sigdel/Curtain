@@ -34,7 +34,7 @@ def test_base62_encode_encodes_expected_values():
 def test_generate_next_short_code_seeds_counter_from_max_url_id(monkeypatch):
     redis_client = DummyRedis(incr_value=2001)
 
-    monkeypatch.setattr("app.services.url_shortener.get_redis", lambda: redis_client)
+    monkeypatch.setattr("app.services.url_shortener.get_counter_redis", lambda: redis_client)
     monkeypatch.setattr(
         "app.services.url_shortener.Url.select",
         lambda *args, **kwargs: DummyScalarQuery(2000),

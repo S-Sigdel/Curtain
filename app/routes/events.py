@@ -3,6 +3,12 @@ import json
 from flask import Blueprint, jsonify, request
 from playhouse.shortcuts import model_to_dict
 
+from app.cache import (
+    URL_ANALYTICS_TTL_SECONDS,
+    get_cached_json,
+    set_cached_json,
+    url_analytics_cache_key,
+)
 from app.models import Event, Url
 
 events_bp = Blueprint("events", __name__)
@@ -33,6 +39,14 @@ def _validation_error(message, status_code=400):
     return jsonify(error=message), status_code
 
 
+def _json_response(payload, status_code=200, cache_status=None):
+    response = jsonify(payload)
+    response.status_code = status_code
+    if cache_status is not None:
+        response.headers["X-Cache"] = cache_status
+    return response
+
+
 @events_bp.route("/events", methods=["GET"])
 def list_events():
     query = Event.select().order_by(Event.id)
@@ -59,6 +73,11 @@ def list_events():
 
 @events_bp.route("/urls/<int:url_id>/analytics", methods=["GET"])
 def get_url_analytics(url_id):
+    cache_key = url_analytics_cache_key(url_id)
+    cached_payload = get_cached_json(cache_key)
+    if cached_payload is not None:
+        return _json_response(cached_payload, cache_status="HIT")
+
     url = Url.get_or_none(Url.id == url_id)
     if url is None:
         return jsonify(error="URL not found"), 404
@@ -70,11 +89,13 @@ def get_url_analytics(url_id):
 
     latest_event_at = events[-1].timestamp.isoformat(timespec="seconds") if events else None
 
-    return jsonify(
-        url_id=url.id,
-        short_code=url.short_code,
-        original_url=url.original_url,
-        total_events=len(events),
-        event_counts=event_counts,
-        latest_event_at=latest_event_at,
-    ), 200
+    payload = {
+        "url_id": url.id,
+        "short_code": url.short_code,
+        "original_url": url.original_url,
+        "total_events": len(events),
+        "event_counts": event_counts,
+        "latest_event_at": latest_event_at,
+    }
+    set_cached_json(cache_key, payload, URL_ANALYTICS_TTL_SECONDS)
+    return _json_response(payload, cache_status="MISS")

@@ -4,6 +4,15 @@ from datetime import UTC, datetime
 from flask import Blueprint, jsonify, request, render_template
 from playhouse.shortcuts import model_to_dict
 
+from app.cache import (
+    URL_DETAIL_TTL_SECONDS,
+    URL_LIST_TTL_SECONDS,
+    get_cached_json,
+    invalidate_url_cache,
+    set_cached_json,
+    url_detail_cache_key,
+    url_list_cache_key,
+)
 from app.models import Event, Url
 from app.services.url_shortener import get_or_create_short_url
 
@@ -21,6 +30,14 @@ def _serialize_url(url):
 
 def _validation_error(message, status_code=400):
     return jsonify(error=message), status_code
+
+
+def _json_response(payload, status_code=200, cache_status=None):
+    response = jsonify(payload)
+    response.status_code = status_code
+    if cache_status is not None:
+        response.headers["X-Cache"] = cache_status
+    return response
 
 
 def _record_event(url, event_type, user_id=None, timestamp=None, details=None):
@@ -131,29 +148,44 @@ def create_url():
                 "original_url": mapping.original_url,
             },
         )
-    return jsonify(_serialize_url(mapping)), status_code
+        invalidate_url_cache(mapping.id, mapping.user_id)
+    return _json_response(_serialize_url(mapping), status_code=status_code, cache_status="BYPASS")
 
 
 @url_shortener_bp.route("/urls", methods=["GET"])
 def list_urls():
-    query = Url.select().order_by(Url.id)
     user_id = request.args.get("user_id", type=int)
     if request.args.get("user_id") is not None and user_id is None:
         return _validation_error("Query parameter 'user_id' must be an integer")
 
+    cache_key = url_list_cache_key(user_id)
+    cached_payload = get_cached_json(cache_key)
+    if cached_payload is not None:
+        return _json_response(cached_payload, cache_status="HIT")
+
+    query = Url.select().order_by(Url.id)
     if user_id is not None:
         query = query.where(Url.user_id == user_id)
 
-    return jsonify([_serialize_url(url) for url in query]), 200
+    payload = [_serialize_url(url) for url in query]
+    set_cached_json(cache_key, payload, URL_LIST_TTL_SECONDS)
+    return _json_response(payload, cache_status="MISS")
 
 
 @url_shortener_bp.route("/urls/<int:url_id>", methods=["GET"])
 def get_url(url_id):
+    cache_key = url_detail_cache_key(url_id)
+    cached_payload = get_cached_json(cache_key)
+    if cached_payload is not None:
+        return _json_response(cached_payload, cache_status="HIT")
+
     url = Url.get_or_none(Url.id == url_id)
     if url is None:
         return jsonify(error="URL not found"), 404
 
-    return jsonify(_serialize_url(url)), 200
+    payload = _serialize_url(url)
+    set_cached_json(cache_key, payload, URL_DETAIL_TTL_SECONDS)
+    return _json_response(payload, cache_status="MISS")
 
 
 @url_shortener_bp.route("/urls/<int:url_id>", methods=["PUT"])
@@ -192,5 +224,6 @@ def update_url(url_id):
                 "is_active": url.is_active,
             },
         )
+        invalidate_url_cache(url.id, url.user_id)
 
-    return jsonify(_serialize_url(url)), 200
+    return _json_response(_serialize_url(url), cache_status="BYPASS")
