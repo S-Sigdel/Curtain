@@ -5,7 +5,7 @@ export const options = {
   scenarios: {
     baseline_health: {
       executor: "constant-vus",
-      vus: 50,
+      vus: 200,
       duration: "30s",
     },
   },
@@ -15,7 +15,7 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || "http://app:5000";
+const BASE_URL = __ENV.BASE_URL || "http://nginx";
 
 export default function () {
   const response = http.get(`${BASE_URL}/health`);

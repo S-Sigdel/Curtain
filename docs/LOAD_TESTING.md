@@ -1,10 +1,17 @@
 # Load Testing
 
-This document describes the scalability baseline setup.
+This document describes the Silver-tier horizontal scaling setup.
 
 ## Baseline Stack
 
-The app container runs with Gunicorn instead of Flask's development server:
+The stack runs:
+
+- 2 Gunicorn-backed app containers: `app` and `app2`
+- 1 Nginx container in front of them
+- PostgreSQL as the durable store
+- Redis for short-code generation
+
+Each app container runs:
 
 - 2 Gunicorn workers
 - bound to `0.0.0.0:5000`
@@ -18,9 +25,9 @@ The baseline `k6` script is:
 
 It simulates:
 
-- 50 concurrent virtual users
+- 200 concurrent virtual users
 - 30 seconds of sustained traffic
-- requests against `GET /health`
+- requests against `GET /health` through Nginx
 
 Additional real-flow scripts are also available:
 
@@ -38,7 +45,7 @@ docker compose up --build -d
 Run the baseline:
 
 ```bash
-docker run --rm --network pe-hackathon-template-2026_default \
+docker run --rm --network curtain_default \
   -v "$PWD/loadtests:/loadtests" \
   grafana/k6 run /loadtests/loadTest.js
 ```
@@ -47,8 +54,8 @@ If you want to override the target explicitly, use:
 
 ```bash
 docker run --rm \
-  --network pe-hackathon-template-2026_default \
-  -e BASE_URL=http://app:5000 \
+  --network curtain_default \
+  -e BASE_URL=http://nginx \
   -v "$PWD/loadtests:/loadtests" \
   grafana/k6 run /loadtests/loadTest.js
 ```
@@ -67,8 +74,8 @@ Then run:
 
 ```bash
 docker run --rm \
-  --network pe-hackathon-template-2026_default \
-  -e BASE_URL=http://app:5000 \
+  --network curtain_default \
+  -e BASE_URL=http://nginx \
   -e URL_ID=1 \
   -v "$PWD/loadtests:/loadtests" \
   grafana/k6 run /loadtests/redirectTest.js
@@ -82,8 +89,8 @@ This script generates unique URLs so the create path is exercised instead of hit
 
 ```bash
 docker run --rm \
-  --network pe-hackathon-template-2026_default \
-  -e BASE_URL=http://app:5000 \
+  --network curtain_default \
+  -e BASE_URL=http://nginx \
   -v "$PWD/loadtests:/loadtests" \
   grafana/k6 run /loadtests/shortenTest.js
 ```

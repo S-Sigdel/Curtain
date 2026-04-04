@@ -81,7 +81,7 @@ Recommended demo:
 
 ```bash
 docker compose exec app sh -lc 'kill -9 1'
-docker ps --filter name=pe-hackathon-template-2026-app-1
+docker ps --filter name=curtain-app-1
 curl http://localhost:5000/health
 ```
 

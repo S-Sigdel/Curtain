@@ -1,6 +1,6 @@
-# MLH PE Hackathon — Flask + Peewee + PostgreSQL Template
+# Curtain
 
-A minimal hackathon starter template. You get the scaffolding and database wiring — you build the models, routes, and CSV loading logic.
+A Flask + Peewee + PostgreSQL service for URL management, events, analytics, and load-testing experiments.
 
 **Stack:** Flask · Peewee ORM · PostgreSQL · uv
 
@@ -37,7 +37,7 @@ You need to work with around the seed files that you can find in [MLH PE Hackath
 
 ```bash
 # 1. Clone the repo
-git clone <repo-url> && cd PE-Hackathon-Template-2026
+git clone git@github.com:S-Sigdel/Curtain.git && cd Curtain
 
 # 2. Install dependencies
 uv sync
@@ -74,7 +74,7 @@ curl http://localhost:5000/health
 If you change Python code while Docker is already running, restart the app service so Gunicorn reloads the updated routes:
 
 ```bash
-docker compose restart app
+docker compose restart app app2 nginx
 ```
 
 ## Testing
@@ -91,6 +91,31 @@ If you are using Docker:
 ```bash
 docker compose exec app uv sync --dev
 docker compose exec app uv run pytest -q
+```
+
+## Scaling Verification
+
+The Docker stack runs two app containers behind Nginx:
+
+- `app`
+- `app2`
+- `nginx`
+
+Check the running containers:
+
+```bash
+docker compose ps
+docker ps
+```
+
+Run the 200-user baseline load test through Nginx:
+
+```bash
+docker run --rm \
+  --network curtain_default \
+  -e BASE_URL=http://nginx \
+  -v "$PWD/loadtests:/loadtests" \
+  grafana/k6 run /loadtests/loadTest.js
 ```
 
 CI runs the same pytest suite on every push and pull request via [.github/workflows/tests.yml](./.github/workflows/tests.yml).
@@ -137,7 +162,7 @@ If `user_id` is omitted, URL creation is still allowed because `urls.user_id` is
 ## Project Structure
 
 ```
-mlh-pe-hackathon/
+Curtain/
 ├── app/
 │   ├── __init__.py          # App factory (create_app)
 │   ├── database.py          # DatabaseProxy, BaseModel, connection hooks
