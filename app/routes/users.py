@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from io import StringIO
 
 from flask import Blueprint, jsonify, request
+from peewee import IntegrityError
 from peewee import chunked
 from playhouse.shortcuts import model_to_dict
 
@@ -55,6 +56,13 @@ def _parse_created_at(value):
     raise ValueError("Invalid created_at value")
 
 
+def _sync_user_sequence():
+    db.execute_sql(
+        "SELECT setval(%s, COALESCE((SELECT MAX(id) FROM users), 1), true)",
+        ("users_id_seq",),
+    )
+
+
 @users_bp.route("/users/bulk", methods=["POST"])
 def bulk_import_users():
     upload = request.files.get("file")
@@ -93,6 +101,7 @@ def bulk_import_users():
                 .as_rowcount()
                 .execute()
             )
+        _sync_user_sequence()
 
     status_code = 201 if inserted else 200
     return jsonify(count=inserted), status_code
@@ -131,11 +140,19 @@ def create_user():
     if message is not None:
         return _validation_error(field, message)
 
-    user = User.create(
-        username=payload["username"].strip(),
-        email=payload["email"].strip(),
-        created_at=datetime.now(UTC).replace(tzinfo=None),
-    )
+    try:
+        user = User.create(
+            username=payload["username"].strip(),
+            email=payload["email"].strip(),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+        )
+    except IntegrityError:
+        _sync_user_sequence()
+        user = User.create(
+            username=payload["username"].strip(),
+            email=payload["email"].strip(),
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+        )
     return jsonify(_serialize_user(user)), 201
 
 

@@ -13,10 +13,14 @@ def url_detail_cache_key(url_id):
     return f"cache:url:{url_id}"
 
 
-def url_list_cache_key(user_id=None):
-    if user_id is None:
+def url_list_cache_key(user_id=None, is_active=None):
+    if user_id is None and is_active is None:
         return "cache:url:list"
-    return f"cache:url:list:user:{user_id}"
+    if user_id is None:
+        return f"cache:url:list:is_active:{str(is_active).lower()}"
+    if is_active is None:
+        return f"cache:url:list:user:{user_id}"
+    return f"cache:url:list:user:{user_id}:is_active:{str(is_active).lower()}"
 
 
 def url_analytics_cache_key(url_id):
@@ -61,5 +65,9 @@ def invalidate_url_cache(url_id, user_id=None):
         url_detail_cache_key(url_id),
         url_analytics_cache_key(url_id),
         url_list_cache_key(),
+        url_list_cache_key(is_active=True),
+        url_list_cache_key(is_active=False),
         url_list_cache_key(user_id),
+        url_list_cache_key(user_id, is_active=True),
+        url_list_cache_key(user_id, is_active=False),
     )

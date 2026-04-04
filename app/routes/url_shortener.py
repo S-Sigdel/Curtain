@@ -158,7 +158,15 @@ def list_urls():
     if request.args.get("user_id") is not None and user_id is None:
         return _validation_error("Query parameter 'user_id' must be an integer")
 
-    cache_key = url_list_cache_key(user_id)
+    is_active_raw = request.args.get("is_active")
+    is_active = None
+    if is_active_raw is not None:
+        lowered = is_active_raw.strip().lower()
+        if lowered not in {"true", "false"}:
+            return _validation_error("Query parameter 'is_active' must be true or false")
+        is_active = lowered == "true"
+
+    cache_key = url_list_cache_key(user_id, is_active)
     cached_payload = get_cached_json(cache_key)
     if cached_payload is not None:
         return _json_response(cached_payload, cache_status="HIT")
@@ -166,6 +174,8 @@ def list_urls():
     query = Url.select().order_by(Url.id)
     if user_id is not None:
         query = query.where(Url.user_id == user_id)
+    if is_active is not None:
+        query = query.where(Url.is_active == is_active)
 
     payload = [_serialize_url(url) for url in query]
     set_cached_json(cache_key, payload, URL_LIST_TTL_SECONDS)
@@ -245,6 +255,7 @@ def delete_url(url_id):
 
 @url_shortener_bp.route("/r/<short_code>", methods=["GET"])
 @url_shortener_bp.route("/urls/short/<short_code>", methods=["GET"])
+@url_shortener_bp.route("/urls/<short_code>/redirect", methods=["GET"])
 def redirect_short_code(short_code):
     url = Url.get_or_none((Url.short_code == short_code) & (Url.is_active == True))
     if url is None:
