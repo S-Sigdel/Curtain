@@ -37,7 +37,7 @@ You need to work with around the seed files that you can find in [MLH PE Hackath
 
 ```bash
 # 1. Clone the repo
-git clone <repo-url> && cd mlh-pe-hackathon
+git clone <repo-url> && cd PE-Hackathon-Template-2026
 
 # 2. Install dependencies
 uv sync
@@ -71,6 +71,12 @@ docker compose exec app uv run python scripts/seed_csv.py
 curl http://localhost:5000/health
 ```
 
+If you change Python code while Docker is already running, restart the app service so Gunicorn reloads the updated routes:
+
+```bash
+docker compose restart app
+```
+
 ## Testing
 
 Run the test suite locally with:
@@ -84,7 +90,7 @@ If you are using Docker:
 
 ```bash
 docker compose exec app uv sync --dev
-docker compose exec app uv run pytest --cov=app --cov-report=term-missing
+docker compose exec app uv run pytest -q
 ```
 
 CI runs the same pytest suite on every push and pull request via [.github/workflows/tests.yml](./.github/workflows/tests.yml).
@@ -102,6 +108,31 @@ Current API highlights:
 - `POST /urls`, `GET /urls`, `GET /urls/<id>`, `PUT /urls/<id>`
 - `GET /events`, `GET /urls/<id>/analytics`
 
+## New User Flow
+
+`POST /urls` only accepts a `user_id` that already exists in the `users` table. If the caller is a brand-new user, create the user first and then use the returned `id` when creating the URL.
+
+```bash
+curl -X POST http://localhost:5000/users \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "newuser",
+    "email": "newuser@example.com"
+  }'
+```
+
+```bash
+curl -X POST http://localhost:5000/urls \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": 1,
+    "original_url": "https://example.com/test",
+    "title": "Test URL"
+  }'
+```
+
+If `user_id` is omitted, URL creation is still allowed because `urls.user_id` is nullable.
+
 
 ## Project Structure
 
@@ -111,13 +142,19 @@ mlh-pe-hackathon/
 │   ├── __init__.py          # App factory (create_app)
 │   ├── database.py          # DatabaseProxy, BaseModel, connection hooks
 │   ├── models/
-│   │   └── __init__.py      # Import your models here
+│   │   └── __init__.py      # Registers User, Url, and Event models
 │   └── routes/
-│       └── __init__.py      # register_routes()
+│       └── __init__.py      # Registers users, urls, and events routes
+├── docs/                    # API examples, failure modes, error handling
+├── loadtests/               # k6 scripts
 ├── scripts/
 │   ├── init_db.py           # Create tables if they do not exist
 │   ├── reset_db.py          # Drop and recreate challenge tables
 │   └── seed_csv.py          # Load users.csv, urls.csv, events.csv
+├── users.csv                # Seed data
+├── urls.csv                 # Seed data
+├── events.csv               # Seed data
+├── docker-compose.yml       # App, Postgres, and Redis services
 ├── .env.example             # DB connection template
 ├── .gitignore               # Python + uv gitignore
 ├── .python-version          # Pin Python version for uv
