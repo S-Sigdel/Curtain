@@ -110,7 +110,7 @@ def shorten_ui():
     if error_message is not None:
         return f'<div id="message" class="error">{error_message}</div>', status_code
 
-    short_url = f"{request.host_url.rstrip('/')}/urls/{mapping.id}"
+    short_url = f"{request.host_url.rstrip('/')}/r/{mapping.short_code}"
     return (
         f'<div id="message" class="success">Short URL ready! '
         f'<a href="{short_url}" target="_blank">{short_url}</a></div>',
