@@ -94,6 +94,7 @@ Detailed behavior docs:
 - [docs/API_EXAMPLES.md](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/docs/API_EXAMPLES.md)
 - [docs/ERROR_HANDELING.md](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/docs/ERROR_HANDELING.md)
 - [docs/FAILURE_MODES.md](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/docs/FAILURE_MODES.md)
+- [docs/LOAD_TESTING.md](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/docs/LOAD_TESTING.md)
 
 
 ## Project Structure
