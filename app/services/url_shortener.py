@@ -1,3 +1,8 @@
+from datetime import datetime, UTC
+from urllib.parse import urlparse
+
+from peewee import IntegrityError
+from redis import RedisError
 from peewee import fn
 
 from app.models import Url
@@ -28,3 +33,44 @@ def generate_next_short_code():
     return base62_encode(redis_client.incr(URL_COUNTER_KEY)).rjust(
         SHORT_CODE_LENGTH, BASE62_ALPHABET[0]
     )
+
+
+def is_valid_long_url(value):
+    parsed = urlparse(value)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def get_or_create_short_url(long_url, title=None, user_id=None):
+    if not long_url:
+        return None, None, "Field 'long_url' is required", 400
+    if not is_valid_long_url(long_url):
+        return None, None, "Field 'long_url' must be a valid http or https URL", 400
+
+    existing_mapping = Url.get_or_none(
+        (Url.original_url == long_url) & (Url.is_active == True)
+    )
+    if existing_mapping is not None:
+        return existing_mapping.short_code, existing_mapping, None, 200
+
+    try:
+        short_code = generate_next_short_code()
+    except RedisError:
+        return None, None, "Short URL generation is temporarily unavailable.", 503
+
+    try:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        mapping = Url.create(
+            short_code=short_code,
+            original_url=long_url,
+            title=title,
+            user_id=user_id,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+        return short_code, mapping, None, 201
+    except IntegrityError as exc:
+        error_message = str(exc).lower()
+        if "user_id" in error_message or "foreign key" in error_message:
+            return None, None, "Field 'user_id' must reference an existing user", 400
+        return None, None, "Could not create short URL", 400
