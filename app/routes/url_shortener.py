@@ -1,7 +1,7 @@
 import json
 from datetime import UTC, datetime
 
-from flask import Blueprint, jsonify, request, render_template
+from flask import Blueprint, jsonify, redirect, request, render_template
 from playhouse.shortcuts import model_to_dict
 
 from app.cache import (
@@ -227,3 +227,27 @@ def update_url(url_id):
         invalidate_url_cache(url.id, url.user_id)
 
     return _json_response(_serialize_url(url), cache_status="BYPASS")
+
+
+@url_shortener_bp.route("/urls/<int:url_id>", methods=["DELETE"])
+def delete_url(url_id):
+    url = Url.get_or_none(Url.id == url_id)
+    if url is None:
+        return jsonify(error="URL not found"), 404
+
+    with url._meta.database.atomic():
+        Event.delete().where(Event.url_id == url.id).execute()
+        url.delete_instance()
+        invalidate_url_cache(url_id, url.user_id)
+
+    return "", 204
+
+
+@url_shortener_bp.route("/r/<short_code>", methods=["GET"])
+@url_shortener_bp.route("/urls/short/<short_code>", methods=["GET"])
+def redirect_short_code(short_code):
+    url = Url.get_or_none((Url.short_code == short_code) & (Url.is_active == True))
+    if url is None:
+        return jsonify(error="URL not found"), 404
+
+    return redirect(url.original_url, code=302)

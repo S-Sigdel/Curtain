@@ -35,6 +35,11 @@ def generate_next_short_code():
     )
 
 
+def generate_next_short_code_without_redis():
+    next_id = (Url.select(fn.MAX(Url.id)).scalar() or 0) + 1
+    return base62_encode(next_id).rjust(SHORT_CODE_LENGTH, BASE62_ALPHABET[0])
+
+
 def is_valid_long_url(value):
     parsed = urlparse(value)
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
@@ -55,7 +60,7 @@ def get_or_create_short_url(long_url, title=None, user_id=None):
     try:
         short_code = generate_next_short_code()
     except RedisError:
-        return None, None, "Short URL generation is temporarily unavailable.", 503
+        short_code = generate_next_short_code_without_redis()
 
     try:
         now = datetime.now(UTC).replace(tzinfo=None)

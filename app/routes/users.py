@@ -7,7 +7,7 @@ from peewee import chunked
 from playhouse.shortcuts import model_to_dict
 
 from app.database import db
-from app.models import User
+from app.models import Event, Url, User
 
 users_bp = Blueprint("users", __name__)
 
@@ -111,7 +111,7 @@ def list_users():
             return jsonify(error="Pagination parameters must be positive integers"), 400
 
         users = [_serialize_user(user) for user in query.paginate(page, per_page)]
-        return jsonify(users=users, page=page, per_page=per_page), 200
+        return jsonify(users), 200
 
     return jsonify([_serialize_user(user) for user in query]), 200
 
@@ -162,3 +162,17 @@ def update_user(user_id):
         user.save(only=updated_fields)
 
     return jsonify(_serialize_user(user)), 200
+
+
+@users_bp.route("/users/<int:user_id>", methods=["DELETE"])
+def delete_user(user_id):
+    user = User.get_or_none(User.id == user_id)
+    if user is None:
+        return jsonify(error="User not found"), 404
+
+    with db.atomic():
+        Url.update(user=None).where(Url.user_id == user_id).execute()
+        Event.update(user=None).where(Event.user_id == user_id).execute()
+        user.delete_instance()
+
+    return "", 204

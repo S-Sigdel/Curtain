@@ -44,10 +44,8 @@ def test_list_users_supports_optional_pagination(integration_client):
 
     assert response.status_code == 200
     body = response.get_json()
-    assert body["page"] == 1
-    assert body["per_page"] == 1
-    assert len(body["users"]) == 1
-    assert body["users"][0]["username"] == "alpha"
+    assert len(body) == 1
+    assert body[0]["username"] == "alpha"
 
 
 def test_get_user_by_id_returns_serialized_user(integration_client):
@@ -113,3 +111,16 @@ def test_update_user_updates_requested_fields(integration_client):
         "email": "before@example.com",
         "created_at": "2026-01-04T09:00:00",
     }
+
+
+def test_delete_user_removes_user_and_returns_204(integration_client):
+    user = User.create(
+        username="delete_me",
+        email="delete_me@example.com",
+        created_at=datetime(2026, 1, 5, 9, 0, 0),
+    )
+
+    response = integration_client.delete(f"/users/{user.id}")
+
+    assert response.status_code == 204
+    assert User.get_or_none(User.id == user.id) is None

@@ -26,9 +26,16 @@ def init_db(app):
         )
     db.initialize(database)
 
+    from app.models import MODELS
+
+    db.connect(reuse_if_open=True)
+    db.create_tables(MODELS, safe=True)
+    db.close()
+
     @app.before_request
     def _db_connect():
         db.connect(reuse_if_open=True)
+        db.create_tables(MODELS, safe=True)
 
     @app.teardown_appcontext
     def _db_close(exc):

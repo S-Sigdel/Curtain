@@ -45,6 +45,41 @@ def test_list_events_returns_serialized_events(integration_client):
     ]
 
 
+def test_create_event_creates_row_and_returns_payload(integration_client):
+    now = datetime(2026, 1, 1, 0, 0, 0)
+    user = User.create(
+        username="owner",
+        email="owner@example.com",
+        created_at=now,
+    )
+    url = Url.create(
+        user_id=user.id,
+        short_code="abc123",
+        original_url="https://example.com/1",
+        title="First",
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+    )
+
+    response = integration_client.post(
+        "/events",
+        json={
+            "url_id": url.id,
+            "user_id": user.id,
+            "event_type": "click",
+            "details": {"referrer": "https://google.com"},
+        },
+    )
+
+    body = response.get_json()
+    assert response.status_code == 201
+    assert body["url_id"] == url.id
+    assert body["user_id"] == user.id
+    assert body["event_type"] == "click"
+    assert body["details"] == {"referrer": "https://google.com"}
+
+
 def test_list_events_supports_filters(integration_client):
     now = datetime(2026, 1, 1, 0, 0, 0)
     user = User.create(

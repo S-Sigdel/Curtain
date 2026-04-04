@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from redis import RedisError
+
 from app.models import Event, Url, User
 
 
@@ -105,6 +107,30 @@ def test_create_url_reuses_existing_active_mapping(integration_client, monkeypat
     }
     assert Url.select().where(Url.original_url == "https://www.wikipedia.org/").count() == 1
     assert fake_redis.seeded is None
+
+
+def test_create_url_falls_back_when_redis_is_unavailable(integration_client, monkeypatch):
+    def raise_redis_error():
+        raise RedisError("counter unavailable")
+
+    owner = User.create(
+        username="owner",
+        email="owner@example.com",
+        created_at=datetime(2026, 1, 1, 9, 0, 0),
+    )
+    monkeypatch.setattr("app.services.url_shortener.get_counter_redis", raise_redis_error)
+
+    response = integration_client.post(
+        "/urls",
+        json={
+            "user_id": owner.id,
+            "original_url": "https://example.com/fallback",
+            "title": "Fallback",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.get_json()["short_code"] == "000001"
 
 
 def test_list_urls_supports_optional_user_filter(integration_client):
@@ -225,3 +251,37 @@ def test_update_url_updates_requested_fields(integration_client):
     assert body["updated_at"] != "2026-01-01T00:00:00"
     event = Event.get(Event.url_id == url.id)
     assert event.event_type == "updated"
+
+
+def test_delete_url_removes_url_and_returns_204(integration_client):
+    now = datetime(2026, 1, 1, 0, 0, 0)
+    url = Url.create(
+        short_code="abc123",
+        original_url="https://example.com/1",
+        title="Delete Me",
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+    )
+
+    response = integration_client.delete(f"/urls/{url.id}")
+
+    assert response.status_code == 204
+    assert Url.get_or_none(Url.id == url.id) is None
+
+
+def test_short_code_redirect_returns_302(integration_client):
+    now = datetime(2026, 1, 1, 0, 0, 0)
+    url = Url.create(
+        short_code="abc123",
+        original_url="https://example.com/redirect",
+        title="Redirect",
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+    )
+
+    response = integration_client.get(f"/r/{url.short_code}")
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "https://example.com/redirect"
