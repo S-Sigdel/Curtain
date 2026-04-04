@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run tests
+        run: uv run pytest --cov=app --cov-report=term-missing --cov-fail-under=50
+
+  deploy-gate:
+    needs: pytest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Confirm deployment can proceed
+        run: echo "Tests and coverage passed. Deployment may proceed."
