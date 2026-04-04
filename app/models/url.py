@@ -10,7 +10,7 @@ class Url(BaseModel):
     # URLs may exist without an owning user in local testing or unauthenticated flows.
     user = ForeignKeyField(User, backref="urls", column_name="user_id", null=True)
     short_code = CharField(max_length=16, unique=True, index=True)
-    original_url = CharField(max_length=2048)
+    original_url = CharField(max_length=2048, index=True)
     title = CharField(max_length=255, null=True)
     is_active = BooleanField(default=True)
     created_at = DateTimeField()
