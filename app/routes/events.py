@@ -96,6 +96,14 @@ def list_events():
     return jsonify([_serialize_event(event) for event in query]), 200
 
 
+@events_bp.route("/events/<int:event_id>", methods=["GET"])
+def get_event(event_id):
+    event = Event.get_or_none(Event.id == event_id)
+    if event is None:
+        return jsonify(error="Event not found"), 404
+    return jsonify(_serialize_event(event)), 200
+
+
 @events_bp.route("/events", methods=["POST"])
 def create_event():
     payload = request.get_json(silent=True)
