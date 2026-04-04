@@ -42,6 +42,6 @@ def test_generate_next_short_code_seeds_counter_from_max_url_id(monkeypatch):
 
     short_code = generate_next_short_code()
 
-    assert short_code == "wh"
+    assert short_code == "0000wh"
     assert redis_client.setnx_calls == [("url:counter", 2000)]
     assert redis_client.incr_calls == ["url:counter"]

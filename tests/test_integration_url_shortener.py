@@ -27,9 +27,9 @@ def test_shorten_url_creates_a_database_row(integration_client, monkeypatch):
     )
 
     assert response.status_code == 201
-    assert response.get_json() == {"short_url": "1"}
+    assert response.get_json() == {"short_url": "000001"}
 
-    created = Url.get(Url.short_code == "1")
+    created = Url.get(Url.short_code == "000001")
     assert created.original_url == "https://www.wikipedia.org/"
     assert created.title == "Wikipedia"
     assert fake_redis.seeded == 0

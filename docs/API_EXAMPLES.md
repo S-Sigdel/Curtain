@@ -20,7 +20,7 @@ Example response:
 
 ```json
 {
-  "short_url": "1"
+  "short_url": "000001"
 }
 ```
 
