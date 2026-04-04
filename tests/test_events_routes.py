@@ -173,6 +173,8 @@ def test_url_analytics_returns_event_counts(integration_client):
         "short_code": "abc123",
         "original_url": "https://example.com/1",
         "total_events": 3,
+        "click_count": 0,
+        "redirect_count": 0,
         "event_counts": {
             "created": 1,
             "updated": 2,

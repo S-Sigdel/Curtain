@@ -117,7 +117,7 @@ def create_event():
         user_id=user_id,
         event_type=payload["event_type"].strip(),
         timestamp=datetime.now(UTC).replace(tzinfo=None),
-        details=json.dumps(details if details is not None else {}),
+        details=json.dumps(details) if details is not None else None,
     )
     delete_cache_keys(url_analytics_cache_key(url.id))
     return jsonify(_serialize_event(event)), 201
@@ -146,6 +146,8 @@ def get_url_analytics(url_id):
         "short_code": url.short_code,
         "original_url": url.original_url,
         "total_events": len(events),
+        "click_count": event_counts.get("click", 0),
+        "redirect_count": event_counts.get("redirect", 0),
         "event_counts": event_counts,
         "latest_event_at": latest_event_at,
     }
