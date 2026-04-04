@@ -95,7 +95,7 @@ docker compose exec app uv run pytest -q
 
 ## Observability
 
-Structured application logs are emitted as JSON, and Prometheus-compatible metrics are exposed at `/metrics`.
+Structured application logs and Gunicorn access/error logs are emitted as JSON, and Prometheus-compatible metrics are exposed at `/metrics`.
 
 Quick checks:
 

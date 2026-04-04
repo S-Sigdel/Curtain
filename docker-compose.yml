@@ -21,7 +21,7 @@ services:
       CACHE_REDIS_URL: redis://redis_cache:6379/0
     volumes:
       - .:/app
-    command: uv run gunicorn -w 2 -b 0.0.0.0:5000 run:app
+    command: uv run gunicorn -c gunicorn.conf.py run:app
 
   app2:
     build:
@@ -43,7 +43,7 @@ services:
       CACHE_REDIS_URL: redis://redis_cache:6379/0
     volumes:
       - .:/app
-    command: uv run gunicorn -w 2 -b 0.0.0.0:5000 run:app
+    command: uv run gunicorn -c gunicorn.conf.py run:app
 
   nginx:
     image: nginx:1.27-alpine

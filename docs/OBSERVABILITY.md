@@ -4,7 +4,7 @@ Curtain exposes structured request logs and a Prometheus-compatible metrics page
 
 ## JSON Logs
 
-Application request logs are emitted as JSON lines with:
+Application request logs and Gunicorn access/error logs are emitted as JSON lines with:
 
 - `timestamp`
 - `level`
@@ -31,6 +31,13 @@ Example log line:
 ```json
 {"timestamp":"2026-04-04T15:00:00+00:00","level":"INFO","logger":"app","message":"request.complete","component":"http","method":"GET","path":"/urls/1","status_code":200,"duration_ms":12.48,"remote_addr":"172.20.0.1","endpoint":"url_shortener.get_url"}
 ```
+
+Gunicorn access/error logs use the same JSON format and add fields such as:
+
+- `client_addr`
+- `query`
+- `response_bytes`
+- `user_agent`
 
 ## Metrics
 
