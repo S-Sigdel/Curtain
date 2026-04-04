@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import socket
 import time
 from datetime import datetime, timezone
 
@@ -16,6 +17,9 @@ from prometheus_client import (
 )
 
 
+INSTANCE_ID = os.environ.get("HOSTNAME", socket.gethostname())
+
+
 class JsonFormatter(logging.Formatter):
     def format(self, record):
         payload = {
@@ -23,6 +27,7 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
+            "instance": INSTANCE_ID,
         }
 
         for field in (
@@ -68,13 +73,13 @@ def init_metrics(app):
     request_counter = Counter(
         "http_requests_total",
         "Total number of HTTP requests served.",
-        labelnames=("method", "path", "status_code"),
+        labelnames=("method", "path", "status_code", "instance"),
         registry=registry,
     )
     request_latency = Histogram(
         "http_request_duration_seconds",
         "HTTP request latency in seconds.",
-        labelnames=("method", "path"),
+        labelnames=("method", "path", "instance"),
         registry=registry,
     )
 
@@ -92,8 +97,9 @@ def init_metrics(app):
             request.method,
             request.path,
             response.status_code,
+            INSTANCE_ID,
         ).inc()
-        request_latency.labels(request.method, request.path).observe(duration_seconds)
+        request_latency.labels(request.method, request.path, INSTANCE_ID).observe(duration_seconds)
 
         app.logger.info(
             "request.complete",

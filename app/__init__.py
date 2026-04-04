@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 
 from app.database import init_db
-from app.observability import configure_json_logging, init_metrics
+from app.observability import INSTANCE_ID, configure_json_logging, init_metrics
 from app.routes import register_routes
 
 
@@ -24,7 +24,7 @@ def create_app(init_database=True):
 
     @app.route("/health")
     def health():
-        return jsonify(status="ok")
+        return jsonify(status="ok", instance=INSTANCE_ID)
 
     @app.route("/debug/fail")
     def debug_fail():

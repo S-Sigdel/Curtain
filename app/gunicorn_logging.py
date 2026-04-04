@@ -1,8 +1,12 @@
 import json
 import logging
+import os
+import socket
 from datetime import datetime, timezone
 
 from gunicorn.glogging import Logger
+
+INSTANCE_ID = os.environ.get("HOSTNAME", socket.gethostname())
 
 
 class GunicornJsonFormatter(logging.Formatter):
@@ -13,6 +17,7 @@ class GunicornJsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
             "component": "gunicorn",
+            "instance": INSTANCE_ID,
         }
 
         for field in (
