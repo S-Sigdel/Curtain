@@ -42,9 +42,9 @@ def is_valid_long_url(value):
 
 def get_or_create_short_url(long_url, title=None, user_id=None):
     if not long_url:
-        return None, None, "Field 'long_url' is required", 400
+        return None, None, "Field 'original_url' is required", 400
     if not is_valid_long_url(long_url):
-        return None, None, "Field 'long_url' must be a valid http or https URL", 400
+        return None, None, "Field 'original_url' must be a valid http or https URL", 400
 
     existing_mapping = Url.get_or_none(
         (Url.original_url == long_url) & (Url.is_active == True)

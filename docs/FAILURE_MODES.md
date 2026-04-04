@@ -6,7 +6,7 @@ This document describes what currently happens when major parts of the system fa
 
 Impact:
 
-- `POST /apis/url/shorten` cannot generate a new short code
+- `POST /urls` cannot generate a new short code
 
 Behavior:
 
@@ -21,14 +21,14 @@ Behavior:
 
 Notes:
 
-- existing redirect lookups still work because mappings are stored in PostgreSQL
+- URL records that already exist in PostgreSQL remain readable
 - no fallback random generator is used
 
 ## PostgreSQL Unavailable
 
 Impact:
 
-- URL creation and redirect lookups cannot complete
+- URL creation, listing, reads, updates, event listing, and analytics cannot complete
 - requests depending on database access will fail
 
 Behavior:
@@ -40,11 +40,11 @@ Notes:
 
 - PostgreSQL is the source of truth for URL mappings
 
-## Unknown or Inactive Short URL
+## Unknown URL Resource
 
 Impact:
 
-- redirect target cannot be resolved
+- the requested URL record cannot be resolved
 
 Behavior:
 
@@ -53,7 +53,7 @@ Behavior:
 
 ```json
 {
-  "error": "Short URL not found"
+  "error": "URL not found"
 }
 ```
 
@@ -61,7 +61,7 @@ Behavior:
 
 Examples:
 
-- missing `long_url`
+- missing `original_url`
 - malformed JSON body
 - invalid foreign key such as a non-existent `user_id`
 
@@ -93,5 +93,4 @@ Expected outcome:
 ## Operational Notes
 
 - Redis is currently used for counter-based short-code generation
-- PostgreSQL stores the durable URL mapping
-- the system is not yet implementing redirect caching in Redis
+- PostgreSQL stores the durable URL records

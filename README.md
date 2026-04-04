@@ -87,14 +87,20 @@ docker compose exec app uv sync --dev
 docker compose exec app uv run pytest --cov=app --cov-report=term-missing
 ```
 
-CI runs the same pytest suite on every push and pull request via [.github/workflows/tests.yml](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/.github/workflows/tests.yml).
+CI runs the same pytest suite on every push and pull request via [.github/workflows/tests.yml](./.github/workflows/tests.yml).
 
 Detailed behavior docs:
 
-- [docs/API_EXAMPLES.md](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/docs/API_EXAMPLES.md)
-- [docs/ERROR_HANDELING.md](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/docs/ERROR_HANDELING.md)
-- [docs/FAILURE_MODES.md](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/docs/FAILURE_MODES.md)
-- [docs/LOAD_TESTING.md](/home/pacific/Programming/hackathons/PE-Hackathon-Template-2026/docs/LOAD_TESTING.md)
+- [docs/API_EXAMPLES.md](./docs/API_EXAMPLES.md)
+- [docs/ERROR_HANDELING.md](./docs/ERROR_HANDELING.md)
+- [docs/FAILURE_MODES.md](./docs/FAILURE_MODES.md)
+- [docs/LOAD_TESTING.md](./docs/LOAD_TESTING.md)
+
+Current API highlights:
+
+- `POST /users`, `GET /users`, `GET /users/<id>`, `PUT /users/<id>`
+- `POST /urls`, `GET /urls`, `GET /urls/<id>`, `PUT /urls/<id>`
+- `GET /events`, `GET /urls/<id>/analytics`
 
 
 ## Project Structure

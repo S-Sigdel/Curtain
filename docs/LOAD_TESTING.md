@@ -53,14 +53,14 @@ docker run --rm \
   grafana/k6 run /loadtests/loadTest.js
 ```
 
-## Redirect Load Test
+## URL Read Load Test
 
-Create a known short URL first:
+Create a known URL row first:
 
 ```bash
-curl -s -X POST http://localhost:5000/apis/url/shorten \
+curl -s -X POST http://localhost:5000/urls \
   -H "Content-Type: application/json" \
-  -d '{"long_url":"https://www.wikipedia.org/"}'
+  -d '{"original_url":"https://www.wikipedia.org/"}'
 ```
 
 Then run:
@@ -69,14 +69,14 @@ Then run:
 docker run --rm \
   --network pe-hackathon-template-2026_default \
   -e BASE_URL=http://app:5000 \
-  -e SHORT_CODE=000001 \
+  -e URL_ID=1 \
   -v "$PWD/loadtests:/loadtests" \
   grafana/k6 run /loadtests/redirectTest.js
 ```
 
-Replace `SHORT_CODE` with the actual short code returned by the API if needed.
+Replace `URL_ID` with an existing row id if needed.
 
-## Shorten Load Test
+## Create Load Test
 
 This script generates unique URLs so the create path is exercised instead of hitting the duplicate-reuse path.
 

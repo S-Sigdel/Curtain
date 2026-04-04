@@ -19,19 +19,19 @@ const BASE_URL = __ENV.BASE_URL || "http://app:5000";
 
 export default function () {
   const payload = JSON.stringify({
-    long_url: `https://example.com/load-test/${__VU}-${__ITER}`,
+    original_url: `https://example.com/load-test/${__VU}-${__ITER}`,
     title: "k6 shorten load test",
   });
 
-  const response = http.post(`${BASE_URL}/apis/url/shorten`, payload, {
+  const response = http.post(`${BASE_URL}/urls`, payload, {
     headers: {
       "Content-Type": "application/json",
     },
   });
 
   check(response, {
-    "shorten returns success": (r) => r.status === 201 || r.status === 200,
-    "shorten returns short_url": (r) => !!r.json("short_url"),
+    "create returns success": (r) => r.status === 201 || r.status === 200,
+    "create returns short_code": (r) => !!r.json("short_code"),
   });
 
   sleep(1);

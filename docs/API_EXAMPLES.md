@@ -8,53 +8,61 @@ These examples assume the app is running on `http://localhost:5000`.
 curl -i http://localhost:5000/health
 ```
 
-## Create a Short URL
+## Create a URL
 
 ```bash
-curl -i -X POST http://localhost:5000/apis/url/shorten \
-  -H "Content-Type: application/json" \
-  -d '{"long_url":"https://www.wikipedia.org/"}'
-```
-
-Example response:
-
-```json
-{
-  "short_url": "000001"
-}
-```
-
-## Create a Short URL With Metadata
-
-```bash
-curl -i -X POST http://localhost:5000/apis/url/shorten \
+curl -i -X POST http://localhost:5000/urls \
   -H "Content-Type: application/json" \
   -d '{
-    "long_url":"https://www.wikipedia.org/",
-    "title":"Wikipedia",
-    "user_id": 1
+    "user_id": 1,
+    "original_url": "https://example.com/test",
+    "title": "Test URL"
   }'
 ```
 
-## Redirect a Short URL
-
-Replace `<short_code>` with the value returned by the shorten endpoint.
+## List URLs
 
 ```bash
-curl -i http://localhost:5000/apis/url/<short_code>
+curl -i http://localhost:5000/urls
+curl -i "http://localhost:5000/urls?user_id=1"
 ```
 
-Expected result:
+## Get URL By ID
 
-- `302 Found`
-- `Location` header pointing to the original URL
+```bash
+curl -i http://localhost:5000/urls/1
+```
+
+## Update a URL
+
+```bash
+curl -i -X PUT http://localhost:5000/urls/1 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Updated Title",
+    "is_active": false
+  }'
+```
+
+## List Events
+
+```bash
+curl -i http://localhost:5000/events
+curl -i "http://localhost:5000/events?url_id=1&user_id=1&event_type=created"
+```
+
+## URL Analytics
+
+```bash
+curl -i http://localhost:5000/urls/1/analytics
+```
 
 ## Error Examples
 
-### Missing `long_url`
+### Missing `original_url`
 
 ```bash
-curl -i -X POST http://localhost:5000/apis/url/shorten \
+curl -i -X POST http://localhost:5000/urls \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -62,23 +70,29 @@ curl -i -X POST http://localhost:5000/apis/url/shorten \
 ### Malformed JSON
 
 ```bash
-curl -i -X POST http://localhost:5000/apis/url/shorten \
+curl -i -X POST http://localhost:5000/urls \
   -H "Content-Type: application/json" \
-  -d '{"long_url": '
+  -d '{"original_url": '
 ```
 
 ### Invalid `user_id`
 
 ```bash
-curl -i -X POST http://localhost:5000/apis/url/shorten \
+curl -i -X POST http://localhost:5000/urls \
   -H "Content-Type: application/json" \
-  -d '{"long_url":"https://www.wikipedia.org/","user_id":999999}'
+  -d '{"original_url":"https://www.wikipedia.org/","user_id":999999}'
 ```
 
-### Missing Short URL
+### Missing URL Resource
 
 ```bash
-curl -i http://localhost:5000/apis/url/doesnotexist
+curl -i http://localhost:5000/urls/999999
+```
+
+### Missing Analytics Resource
+
+```bash
+curl -i http://localhost:5000/urls/999999/analytics
 ```
 
 ### Unknown Route
@@ -91,8 +105,8 @@ curl -i http://localhost:5000/does-not-exist
 
 ```bash
 docker compose stop redis
-curl -i -X POST http://localhost:5000/apis/url/shorten \
+curl -i -X POST http://localhost:5000/urls \
   -H "Content-Type: application/json" \
-  -d '{"long_url":"https://www.wikipedia.org/"}'
+  -d '{"original_url":"https://www.wikipedia.org/"}'
 docker compose start redis
 ```

@@ -4,11 +4,11 @@ from app import create_app
 from app.database import db, init_db
 
 
-def test_unknown_short_code_returns_json_404(client):
+def test_unknown_route_returns_json_404(client):
     response = client.get("/does-not-exist")
 
     assert response.status_code == 404
-    assert response.get_json() == {"error": "Short URL not found"}
+    assert response.get_json() == {"error": "Not found"}
 
 
 def test_unknown_nested_route_returns_json_404(client):

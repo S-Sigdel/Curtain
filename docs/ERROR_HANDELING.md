@@ -20,15 +20,17 @@ Returned when the request is syntactically acceptable but invalid for the endpoi
 
 Examples:
 
-- `POST /apis/url/shorten` without `long_url`
-- malformed JSON that results in no usable `long_url`
+- `POST /urls` without `original_url`
+- malformed JSON that results in no usable `original_url`
 - database integrity failures such as an invalid `user_id`
+- invalid query parameters such as `GET /urls?user_id=abc`
+- invalid query parameters such as `GET /events?url_id=abc`
 
 Typical response:
 
 ```json
 {
-  "error": "Field 'long_url' is required"
+  "error": "Field 'original_url' is required"
 }
 ```
 
@@ -39,7 +41,7 @@ Returned when the route or short URL does not exist.
 Examples:
 
 - unknown application route
-- inactive or missing short code
+- missing URL resource ID
 
 Typical responses:
 
@@ -51,7 +53,7 @@ Typical responses:
 
 ```json
 {
-  "error": "Short URL not found"
+  "error": "URL not found"
 }
 ```
 
@@ -82,4 +84,4 @@ Typical response:
 ## Notes
 
 - The app is designed to return JSON errors instead of Flask HTML error pages.
-- Redirect lookups still fall back to PostgreSQL; Redis is currently used for short-code generation, not redirect caching.
+- Redis is currently used for short-code generation when creating URL rows.

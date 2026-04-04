@@ -28,8 +28,8 @@
 
     <form hx-post="/shorten-ui" hx-target="#message" hx-indicator=".loading">
         <div class="form-group">
-            <label for="long_url">Long URL:</label>
-            <input type="url" id="long_url" name="long_url" required placeholder="https://www.wikipedia.org/">
+            <label for="original_url">Original URL:</label>
+            <input type="url" id="original_url" name="original_url" required placeholder="https://www.wikipedia.org/">
         </div>
         <div class="form-group">
             <label for="title">Title (Optional):</label>
@@ -48,8 +48,8 @@
     <hr style="margin-top: 40px;">
     <h2>Reference</h2>
     <ul>
-        <li>API POST: <code>/apis/url/shorten</code></li>
-        <li>Redirect: <code>/apis/url/&lt;short_code&gt;</code></li>
+        <li>API POST: <code>/urls</code></li>
+        <li>API GET: <code>/urls/&lt;id&gt;</code></li>
         <li>Health: <a href="/health"><code>/health</code></a></li>
     </ul>
 </body>
