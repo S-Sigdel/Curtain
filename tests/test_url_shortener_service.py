@@ -1,4 +1,4 @@
-from app.services.url_shortener import base62_encode, generate_next_short_code
+from app.services.url_shortener import base62_encode, generate_next_short_code, get_or_create_short_url
 
 
 class DummyScalarQuery:
@@ -45,3 +45,10 @@ def test_generate_next_short_code_seeds_counter_from_max_url_id(monkeypatch):
     assert short_code == "0000wh"
     assert redis_client.setnx_calls == [("url:counter", 2000)]
     assert redis_client.incr_calls == ["url:counter"]
+
+
+def test_get_or_create_short_url_rejects_url_exceeding_2048_chars():
+    long_url = "https://example.com/" + "a" * 2030
+    _code, _mapping, error, status = get_or_create_short_url(long_url)
+    assert status == 400
+    assert "2048" in error

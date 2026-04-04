@@ -261,4 +261,5 @@ def redirect_short_code(short_code):
     if url is None:
         return jsonify(error="URL not found"), 404
 
+    _record_event(url, "redirect", details={"short_code": short_code})
     return redirect(url.original_url, code=302)

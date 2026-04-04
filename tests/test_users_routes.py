@@ -113,6 +113,22 @@ def test_update_user_updates_requested_fields(integration_client):
     }
 
 
+def test_create_user_rejects_duplicate_email(integration_client):
+    User.create(
+        username="first",
+        email="shared@example.com",
+        created_at=datetime(2026, 1, 1, 0, 0, 0),
+    )
+
+    response = integration_client.post(
+        "/users",
+        json={"username": "second", "email": "shared@example.com"},
+    )
+
+    assert response.status_code == 422
+    assert response.get_json() == {"errors": {"email": "Field 'email' must be unique"}}
+
+
 def test_delete_user_removes_user_and_returns_204(integration_client):
     user = User.create(
         username="delete_me",

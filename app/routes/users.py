@@ -149,13 +149,18 @@ def create_user():
             email=payload["email"].strip(),
             created_at=datetime.now(UTC).replace(tzinfo=None),
         )
-    except IntegrityError:
+    except IntegrityError as exc:
+        if "email" in str(exc).lower() or "unique" in str(exc).lower():
+            return _validation_error("email", "Field 'email' must be unique")
         _sync_user_sequence()
-        user = User.create(
-            username=payload["username"].strip(),
-            email=payload["email"].strip(),
-            created_at=datetime.now(UTC).replace(tzinfo=None),
-        )
+        try:
+            user = User.create(
+                username=payload["username"].strip(),
+                email=payload["email"].strip(),
+                created_at=datetime.now(UTC).replace(tzinfo=None),
+            )
+        except IntegrityError:
+            return _validation_error("email", "Field 'email' must be unique")
     return jsonify(_serialize_user(user)), 201
 
 

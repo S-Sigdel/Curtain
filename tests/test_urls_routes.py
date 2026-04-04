@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from app.models import Url
+from app.models import Event, Url
 
 
 def test_create_url_requires_original_url(client):
@@ -37,6 +37,22 @@ def test_list_urls_rejects_invalid_user_id_query(client):
     assert response.get_json() == {
         "error": "Query parameter 'user_id' must be an integer"
     }
+
+
+def test_redirect_short_code_records_redirect_event(integration_client):
+    url = Url.create(
+        short_code="click1",
+        original_url="https://example.com/tracked",
+        is_active=True,
+        created_at=datetime(2026, 1, 1, 0, 0, 0),
+        updated_at=datetime(2026, 1, 1, 0, 0, 0),
+    )
+
+    integration_client.get("/r/click1")
+
+    events = list(Event.select().where(Event.url_id == url.id))
+    assert len(events) == 1
+    assert events[0].event_type == "redirect"
 
 
 def test_update_url_rejects_invalid_boolean_type(integration_client):
