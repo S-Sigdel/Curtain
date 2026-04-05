@@ -83,6 +83,20 @@ def init_metrics(app):
         registry=registry,
     )
 
+    # Shard ring health counters — visible in Grafana for the fire-drill demo.
+    app.shard_failures = Counter(
+        "redis_shard_failures_total",
+        "Redis shard connection failures.",
+        labelnames=("shard_id", "instance"),
+        registry=registry,
+    )
+    app.shard_failovers = Counter(
+        "redis_shard_failovers_total",
+        "Times traffic was rerouted to a backup shard.",
+        labelnames=("from_shard", "to_shard", "instance"),
+        registry=registry,
+    )
+
     @app.before_request
     def start_request_timer():
         g.request_started_at = time.perf_counter()

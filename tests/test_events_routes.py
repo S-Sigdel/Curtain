@@ -1,4 +1,5 @@
 from datetime import datetime
+from unittest.mock import patch
 
 from app.models import Event, Url, User
 
@@ -53,6 +54,13 @@ def test_create_event_rejects_non_object_details(client):
 
     assert response.status_code == 400
     assert "details" in response.get_json()["error"].lower()
+
+
+def test_create_event_rejects_non_object_request_body(client):
+    response = client.post("/events", json=["not", "a", "dict"])
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "JSON body must be an object"}
 
 
 def test_create_event_creates_row_and_returns_payload(integration_client):
@@ -198,6 +206,38 @@ def test_url_analytics_returns_404_for_missing_url(integration_client):
 
     assert response.status_code == 404
     assert response.get_json() == {"error": "URL not found"}
+
+
+def test_url_analytics_hides_extra_cached_fields(integration_client):
+    cached_payload = {
+        "url_id": 1,
+        "short_code": "abc123",
+        "original_url": "https://example.com/1",
+        "total_events": 3,
+        "click_count": 0,
+        "redirect_count": 0,
+        "event_counts": {"created": 1, "updated": 2},
+        "latest_event_at": "2026-01-01T02:00:00",
+        "realtime": {"total_clicks": 999},
+    }
+
+    with patch("app.routes.events.get_cached_json", return_value=cached_payload):
+        response = integration_client.get("/urls/1/analytics")
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "url_id": 1,
+        "short_code": "abc123",
+        "original_url": "https://example.com/1",
+        "total_events": 3,
+        "click_count": 0,
+        "redirect_count": 0,
+        "event_counts": {
+            "created": 1,
+            "updated": 2,
+        },
+        "latest_event_at": "2026-01-01T02:00:00",
+    }
 
 
 def test_list_events_rejects_invalid_query_params(client):

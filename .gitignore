@@ -38,6 +38,9 @@ Thumbs.db
 # Judging (not visible to participants)
 judging/
 
+# Internal planning (not for public)
+plan.md
+
 
 
 .coverage

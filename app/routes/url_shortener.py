@@ -7,13 +7,17 @@ from playhouse.shortcuts import model_to_dict
 from app.cache import (
     URL_DETAIL_TTL_SECONDS,
     URL_LIST_TTL_SECONDS,
+    URL_REDIRECT_TTL_SECONDS,
     get_cached_json,
     invalidate_url_cache,
     set_cached_json,
     url_detail_cache_key,
+    url_redirect_cache_key,
     url_list_cache_key,
 )
 from app.models import Event, Url
+from app.redis_client import get_shard_ring
+from app.services.click_counter import record_click
 from app.services.url_shortener import get_or_create_short_url
 
 url_shortener_bp = Blueprint("url_shortener", __name__)
@@ -148,7 +152,7 @@ def create_url():
                 "original_url": mapping.original_url,
             },
         )
-        invalidate_url_cache(mapping.id, mapping.user_id)
+        invalidate_url_cache(mapping.id, mapping.user_id, mapping.short_code)
     return _json_response(_serialize_url(mapping), status_code=status_code, cache_status="BYPASS")
 
 
@@ -234,7 +238,7 @@ def update_url(url_id):
                 "is_active": url.is_active,
             },
         )
-        invalidate_url_cache(url.id, url.user_id)
+        invalidate_url_cache(url.id, url.user_id, url.short_code)
 
     return _json_response(_serialize_url(url), cache_status="BYPASS")
 
@@ -248,7 +252,7 @@ def delete_url(url_id):
     with url._meta.database.atomic():
         Event.delete().where(Event.url_id == url.id).execute()
         url.delete_instance()
-        invalidate_url_cache(url_id, url.user_id)
+        invalidate_url_cache(url_id, url.user_id, url.short_code)
 
     return "", 204
 
@@ -257,9 +261,37 @@ def delete_url(url_id):
 @url_shortener_bp.route("/urls/short/<short_code>", methods=["GET"])
 @url_shortener_bp.route("/urls/<short_code>/redirect", methods=["GET"])
 def redirect_short_code(short_code):
-    url = Url.get_or_none((Url.short_code == short_code) & (Url.is_active == True))
-    if url is None:
-        return jsonify(error="URL not found"), 404
+    cache_key = url_redirect_cache_key(short_code)
+    cached_payload = get_cached_json(cache_key)
+    if cached_payload is not None:
+        original_url = cached_payload["original_url"]
+        url_id = cached_payload["url_id"]
+        cache_status = "HIT"
+    else:
+        url = Url.get_or_none((Url.short_code == short_code) & (Url.is_active == True))
+        if url is None:
+            return jsonify(error="URL not found"), 404
+        original_url = url.original_url
+        url_id = url.id
+        set_cached_json(
+            cache_key,
+            {"original_url": original_url, "url_id": url_id},
+            URL_REDIRECT_TTL_SECONDS,
+        )
+        cache_status = "MISS"
 
-    _record_event(url, "redirect", details={"short_code": short_code})
-    return redirect(url.original_url, code=302)
+    # Fast path: increment sharded Redis counter + write to stream.
+    # record_click never raises — redirect succeeds even if all shards are down.
+    visitor_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or ""
+    record_click(short_code, visitor_ip, get_shard_ring())
+    Event.create(
+        url_id=url_id,
+        user_id=None,
+        event_type="redirect",
+        timestamp=datetime.now(UTC).replace(tzinfo=None),
+        details=json.dumps({"short_code": short_code}),
+    )
+
+    response = redirect(original_url, code=302)
+    response.headers["X-Cache"] = cache_status
+    return response

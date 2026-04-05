@@ -14,6 +14,16 @@ from app.cache import (
 from app.models import Event, Url, User
 
 events_bp = Blueprint("events", __name__)
+_ANALYTICS_FIELDS = (
+    "url_id",
+    "short_code",
+    "original_url",
+    "total_events",
+    "click_count",
+    "redirect_count",
+    "event_counts",
+    "latest_event_at",
+)
 
 
 def _parse_details(details):
@@ -47,6 +57,12 @@ def _json_response(payload, status_code=200, cache_status=None):
     if cache_status is not None:
         response.headers["X-Cache"] = cache_status
     return response
+
+
+def _normalize_analytics_payload(payload):
+    if not isinstance(payload, dict):
+        return payload
+    return {field: payload.get(field) for field in _ANALYTICS_FIELDS}
 
 
 def _validate_create_payload(payload):
@@ -136,7 +152,7 @@ def get_url_analytics(url_id):
     cache_key = url_analytics_cache_key(url_id)
     cached_payload = get_cached_json(cache_key)
     if cached_payload is not None:
-        return _json_response(cached_payload, cache_status="HIT")
+        return _json_response(_normalize_analytics_payload(cached_payload), cache_status="HIT")
 
     url = Url.get_or_none(Url.id == url_id)
     if url is None:
@@ -160,4 +176,4 @@ def get_url_analytics(url_id):
         "latest_event_at": latest_event_at,
     }
     set_cached_json(cache_key, payload, URL_ANALYTICS_TTL_SECONDS)
-    return _json_response(payload, cache_status="MISS")
+    return _json_response(_normalize_analytics_payload(payload), cache_status="MISS")
