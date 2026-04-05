@@ -18,6 +18,7 @@ flowchart TD
     SC[stream_consumer]
     P[Prometheus]
     G[Grafana]
+    PL[PromLens]
     NT[notifier]
     DR[discord_relay]
     D[Discord Webhook]
@@ -46,10 +47,11 @@ flowchart TD
     S1 -->|Redis Streams| SC
     SC -->|batched redirect events| PG
 
-    A1 -->|/metrics| P
-    A2 -->|/metrics| P
-    P --> G
-    P -->|alert polling| NT
+    A1 -->|/metrics scrape target| P
+    A2 -->|/metrics scrape target| P
+    P -->|queries + dashboards| G
+    P -->|query exploration| PL
+    NT -->|poll /api/v1/alerts| P
     NT -->|alert batch| DR
     DR --> D
 ```

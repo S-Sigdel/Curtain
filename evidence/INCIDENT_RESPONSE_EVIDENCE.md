@@ -33,7 +33,7 @@ Below is a screenshot of the alert logic configuration located in [../monitoring
 ![Alert Config](../docs/images/incident_response/Silver_Incident_alert_logic.png)
 
 This evidence supports the current alert setup for service-down and high-error-rate scenarios, along with the notification path that forwards alerts to Discord.
-Prometheus scrapes every `15s`, evaluates every `15s`, and the notifier polls every `15s`, so the alerting path operates comfortably within the quest’s 5-minute requirement.
+Prometheus currently scrapes every `500ms` and evaluates every `500ms`, while the notifier polls every `15s`, so the alerting path operates comfortably within the quest’s 5-minute requirement.
 
 Relevant docs:
 
