@@ -265,15 +265,17 @@ def redirect_short_code(short_code):
     cached_payload = get_cached_json(cache_key)
     if cached_payload is not None:
         original_url = cached_payload["original_url"]
+        url_id = cached_payload["url_id"]
         cache_status = "HIT"
     else:
         url = Url.get_or_none((Url.short_code == short_code) & (Url.is_active == True))
         if url is None:
             return jsonify(error="URL not found"), 404
         original_url = url.original_url
+        url_id = url.id
         set_cached_json(
             cache_key,
-            {"original_url": original_url},
+            {"original_url": original_url, "url_id": url_id},
             URL_REDIRECT_TTL_SECONDS,
         )
         cache_status = "MISS"
@@ -282,6 +284,13 @@ def redirect_short_code(short_code):
     # record_click never raises — redirect succeeds even if all shards are down.
     visitor_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or ""
     record_click(short_code, visitor_ip, get_shard_ring())
+    Event.create(
+        url_id=url_id,
+        user_id=None,
+        event_type="redirect",
+        timestamp=datetime.now(UTC).replace(tzinfo=None),
+        details=json.dumps({"short_code": short_code}),
+    )
 
     response = redirect(original_url, code=302)
     response.headers["X-Cache"] = cache_status
