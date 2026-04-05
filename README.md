@@ -2,6 +2,56 @@
 
 Curtain is a Flask service for URL shortening, redirect tracking, analytics, and incident-response demos. The current runtime architecture uses PostgreSQL for durable data, Redis for counters and cache, sharded Redis instances for real-time click collection, Nginx for load balancing, and Prometheus/Grafana for monitoring.
 
+## Architecture Diagram
+
+```mermaid
+flowchart TD
+    U[User / Client]
+    N[Nginx<br/>Load Balancer]
+    A1[app<br/>Flask + Gunicorn]
+    A2[app2<br/>Flask + Gunicorn]
+    PG[(PostgreSQL)]
+    RC[(redis<br/>URL Counter)]
+    CACHE[(redis_cache<br/>Read Cache)]
+    S0[(redis_shard0<br/>Clicks + Streams)]
+    S1[(redis_shard1<br/>Clicks + Streams)]
+    SC[stream_consumer]
+    P[Prometheus]
+    G[Grafana]
+    NT[notifier]
+    DR[discord_relay]
+    D[Discord Webhook]
+
+    U -->|HTTP| N
+    N --> A1
+    N --> A2
+
+    A1 -->|users / urls / events| PG
+    A2 -->|users / urls / events| PG
+
+    A1 -->|short-code counter| RC
+    A2 -->|short-code counter| RC
+
+    A1 -->|cached reads| CACHE
+    A2 -->|cached reads| CACHE
+
+    A1 -->|redirect click writes| S0
+    A1 -->|redirect click writes| S1
+    A2 -->|redirect click writes| S0
+    A2 -->|redirect click writes| S1
+
+    S0 -->|Redis Streams| SC
+    S1 -->|Redis Streams| SC
+    SC -->|batched redirect events| PG
+
+    A1 -->|/metrics| P
+    A2 -->|/metrics| P
+    P --> G
+    P -->|alert polling| NT
+    NT -->|alert batch| DR
+    DR --> D
+```
+
 ## Build Instructions
 
 ### Prerequisites
