@@ -32,3 +32,12 @@ groups:
         annotations:
           summary: Curtain high error rate
           description: 5xx responses have exceeded 5 percent for at least 2 minutes.
+
+      - alert: CurtainRedisShardFailures
+        expr: increase(redis_shard_failures_total{job="curtain-app"}[1m]) > 5
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis shard {{ $labels.shard_id }} is failing
+          description: More than 5 shard connection failures in the last minute. Traffic is being rerouted via the hash ring failover.
