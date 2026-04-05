@@ -12,7 +12,7 @@ flowchart TD
     A2[app2<br/>Flask + Gunicorn]
     PG[(PostgreSQL)]
     RC[(redis<br/>URL Counter)]
-    CACHE[(redis_cache<br/>Read Cache)]
+    CACHE[(redis_cache<br/>URL + Analytics Cache)]
     S0[(redis_shard0<br/>Clicks + Streams)]
     S1[(redis_shard1<br/>Clicks + Streams)]
     SC[stream_consumer]
@@ -26,14 +26,16 @@ flowchart TD
     N --> A1
     N --> A2
 
-    A1 -->|users / urls / events| PG
-    A2 -->|users / urls / events| PG
+    A1 -->|DB reads/writes| PG
+    A2 -->|DB reads/writes| PG
 
     A1 -->|short-code counter| RC
     A2 -->|short-code counter| RC
 
-    A1 -->|cached reads| CACHE
-    A2 -->|cached reads| CACHE
+    A1 -->|cache lookup / populate| CACHE
+    A2 -->|cache lookup / populate| CACHE
+
+    CACHE -.->|cache miss -> DB| PG
 
     A1 -->|redirect click writes| S0
     A1 -->|redirect click writes| S1
