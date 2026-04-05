@@ -9,7 +9,8 @@ Bronze is the baseline: run a load test, simulate 50 concurrent users, and recor
 Below is the screenshot showing the 50-user load-test run.
 ![Bronze Evidence](../docs/images/scalability/bronze_scale_evidence.png)
 
-This run establishes the baseline before scale-out and caching work. The terminal output captures the k6 summary, including the measured latency distribution and error-rate metrics used as the starting point for later optimizations.
+This run establishes the baseline before scale-out and caching work. In this baseline run, the measured p95 response time was `38.06 ms` and the error rate was `0.00%`, which gives us the reference point for later 200-user and cache-backed high-concurrency tests.
+That is `0.03806 s` at p95.
 
 Relevant docs:
 
@@ -27,6 +28,7 @@ Below is the screenshot showing two app containers plus the Nginx load balancer 
 ![Silver multiple instances Evidence](../docs/images/scalability/silver_scale_docker_ps.png)
 
 These prove that the service was scaled horizontally with multiple app instances and a dedicated traffic-splitting layer, rather than relying on a single container.
+In the 200-user run, the measured p95 response time was `218.17 ms`, which is `0.21817 s`, and the error rate was `0.00%`. This stays well under the Silver requirement of keeping response times below `3 s`.
 
 Relevant docs:
 
@@ -39,6 +41,8 @@ Gold is about caching, bottleneck reduction, and surviving high-concurrency traf
 
 Below is the screenshot showing the 500-user load-test run.
 ![Gold 500 User Evidence](../docs/images/scalability/gold_scale_500.png)
+
+In the 500-user run, the measured p95 response time was `1.01 s` and the error rate was `0.00%`. This satisfies the Gold-tier stability requirement of staying under `5%` errors during the high-concurrency run.
 
 Below is the screenshot showing analytics caching behavior. The first request returns `X-Cache: MISS`, and the follow-up request returns `X-Cache: HIT`, proving that the hot read path is being served from Redis-backed cache instead of recomputing from PostgreSQL on every request.
 ![Gold Redis Cache Evidence](../docs/images/scalability/gold_scale_cache.png)

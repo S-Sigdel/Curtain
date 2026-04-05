@@ -5,7 +5,7 @@ export const options = {
   scenarios: {
     baseline_health: {
       executor: "constant-vus",
-      vus: 200,
+      vus: 200, // chenge this to check different number of vus
       duration: "30s",
     },
   },
