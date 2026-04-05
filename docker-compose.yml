@@ -24,6 +24,7 @@ x-app-base: &app-base
     CACHE_REDIS_URL: redis://redis_cache:6379/0
     REDIS_SHARDS: redis_shard0:6379,redis_shard1:6379
     ENABLE_INCIDENT_DEBUG_ROUTES: ${ENABLE_INCIDENT_DEBUG_ROUTES:-false}
+    PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
   volumes:
     - .:/app
   command: uv run gunicorn -c gunicorn.conf.py run:app
@@ -94,10 +95,21 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: "500ms"
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
+
+  promlens:
+    image: prom/promlens:v0.3.0
+    depends_on:
+      prometheus:
+        condition: service_started
+    ports:
+      - "8081:8080"
+    command:
+      - --web.default-prometheus-url=http://localhost:9090
 
   notifier:
     build:

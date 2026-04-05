@@ -8,3 +8,8 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
     editable: false
+    jsonData:
+      timeInterval: "500ms"
+      minStep: "500ms"
+      queryTimeout: "60s"
+      httpMethod: POST

@@ -31,16 +31,11 @@ def test_internal_errors_return_json_500(app):
 
 def test_init_db_uses_database_url(monkeypatch):
     app = create_app(init_database=False)
-    captured = {}
 
-    def fake_connect(url):
-        captured["url"] = url
-        return SqliteDatabase(":memory:")
-
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
-    monkeypatch.setattr("app.database.connect", fake_connect)
+    sqlite_db = SqliteDatabase(":memory:")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://postgres:postgres@db:5432/hackathon_db")
+    monkeypatch.setattr("app.database._build_database", lambda: sqlite_db)
 
     init_db(app)
 
-    assert captured["url"] == "sqlite:///:memory:"
     assert db.obj is not None

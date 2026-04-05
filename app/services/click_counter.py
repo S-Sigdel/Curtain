@@ -66,14 +66,13 @@ def _execute_click_pipeline(client, short_code: str, visitor_ip: str) -> None:
     pipe.execute()
 
 
-def record_click(short_code: str, visitor_ip: str, ring) -> None:
+def record_click(short_code: str, visitor_ip: str, ring) -> bool:
     """
     Record one click against ``short_code`` on the appropriate Redis shard.
 
-    Args:
-        short_code:  The 6-char short code that was accessed.
-        visitor_ip:  Remote address of the visitor (used for HyperLogLog).
-        ring:        A ShardRing / ResilientShardRing instance.
+    Returns:
+        True  — click was written to at least one Redis shard.
+        False — all shards failed; caller should persist via the DB fallback.
 
     Failures are logged at WARNING level and do NOT propagate — the caller
     (the redirect route) must never return a 5xx because the counter failed.
@@ -83,7 +82,7 @@ def record_click(short_code: str, visitor_ip: str, ring) -> None:
     try:
         primary_shard_id, client = ring.get_shard(short_code)
         _execute_click_pipeline(client, short_code, visitor_ip)
-        return
+        return True
     except Exception as exc:  # RedisError, AllShardsDownError, etc.
         if primary_shard_id is not None and hasattr(ring, "record_failure"):
             ring.record_failure(primary_shard_id)
@@ -97,7 +96,7 @@ def record_click(short_code: str, visitor_ip: str, ring) -> None:
                 _execute_click_pipeline(client, short_code, visitor_ip)
                 if primary_shard_id is not None and hasattr(ring, "record_failover"):
                     ring.record_failover(primary_shard_id, shard_id)
-                return
+                return True
             except Exception:
                 if hasattr(ring, "record_failure"):
                     ring.record_failure(shard_id)
@@ -108,6 +107,7 @@ def record_click(short_code: str, visitor_ip: str, ring) -> None:
         "click_counter.record_failed",
         extra={"short_code": short_code, "error": str(primary_error)},
     )
+    return False
 
 
 def _fetch_stats_from_client(client, short_code: str, bucket_labels: list[str]) -> dict:

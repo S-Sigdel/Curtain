@@ -181,6 +181,9 @@ def list_urls():
     if is_active is not None:
         query = query.where(Url.is_active == is_active)
 
+    limit = request.args.get("limit", default=100, type=int)
+    query = query.limit(max(1, min(limit, 500)))
+
     payload = [_serialize_url(url) for url in query]
     set_cached_json(cache_key, payload, URL_LIST_TTL_SECONDS)
     return _json_response(payload, cache_status="MISS")
@@ -280,17 +283,18 @@ def redirect_short_code(short_code):
         )
         cache_status = "MISS"
 
-    # Fast path: increment sharded Redis counter + write to stream.
-    # record_click never raises — redirect succeeds even if all shards are down.
+    # Fast path: Redis shard INCR + HyperLogLog + Stream append (1 RTT).
+    # Falls back to a direct PostgreSQL Event row when all shards are down so
+    # redirects are always counted, even in environments without Redis.
     visitor_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or ""
-    record_click(short_code, visitor_ip, get_shard_ring())
-    Event.create(
-        url_id=url_id,
-        user_id=None,
-        event_type="redirect",
-        timestamp=datetime.now(UTC).replace(tzinfo=None),
-        details=json.dumps({"short_code": short_code}),
-    )
+    if not record_click(short_code, visitor_ip, get_shard_ring()):
+        Event.create(
+            url_id=url_id,
+            user_id=None,
+            event_type="redirect",
+            timestamp=datetime.now(UTC).replace(tzinfo=None),
+            details=json.dumps({"short_code": short_code}),
+        )
 
     response = redirect(original_url, code=302)
     response.headers["X-Cache"] = cache_status

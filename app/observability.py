@@ -10,6 +10,7 @@ from prometheus_client import (
     CONTENT_TYPE_LATEST,
     CollectorRegistry,
     Counter,
+    Gauge,
     Histogram,
     ProcessCollector,
     PlatformCollector,
@@ -67,8 +68,14 @@ def configure_json_logging(app):
 
 def init_metrics(app):
     registry = CollectorRegistry()
-    ProcessCollector(registry=registry)
-    PlatformCollector(registry=registry)
+    
+    # Use multiprocess collector if configured (standard for Gunicorn)
+    if "PROMETHEUS_MULTIPROC_DIR" in os.environ:
+        from prometheus_client import multiprocess
+        multiprocess.MultiProcessCollector(registry)
+    else:
+        ProcessCollector(registry=registry)
+        PlatformCollector(registry=registry)
 
     request_counter = Counter(
         "http_requests_total",
@@ -97,12 +104,41 @@ def init_metrics(app):
         registry=registry,
     )
 
+    # Manual process metrics for multiprocess mode
+    memory_gauge = Gauge(
+        "process_resident_memory_bytes",
+        "Resident memory size in bytes.",
+        labelnames=("instance",),
+        registry=registry,
+        multiprocess_mode="livesum",
+    )
+    cpu_counter = Counter(
+        "process_cpu_seconds_total",
+        "Total user and system CPU time spent in seconds.",
+        labelnames=("instance",),
+        registry=registry,
+    )
+
     @app.before_request
     def start_request_timer():
+        # Update process metrics on every request to ensure fresh data in shared storage
+        try:
+            import psutil
+            process = psutil.Process()
+            memory_gauge.labels(INSTANCE_ID).set(process.memory_info().rss)
+            cpu_counter.labels(INSTANCE_ID).inc(process.cpu_times().user + process.cpu_times().system - getattr(g, "last_cpu", 0))
+            g.last_cpu = process.cpu_times().user + process.cpu_times().system
+        except (ImportError, Exception):
+            pass
+
         g.request_started_at = time.perf_counter()
 
     @app.after_request
     def record_request_metrics(response):
+        # Exclude internal metrics scrapes from traffic stats
+        if request.path == "/metrics":
+            return response
+
         duration_seconds = max(
             time.perf_counter() - getattr(g, "request_started_at", time.perf_counter()),
             0.0,
@@ -131,5 +167,9 @@ def init_metrics(app):
 
     @app.route("/metrics")
     def metrics():
+        if "PROMETHEUS_MULTIPROC_DIR" in os.environ:
+            from prometheus_client import multiprocess
+            reg = CollectorRegistry()
+            multiprocess.MultiProcessCollector(reg)
+            return Response(generate_latest(reg), mimetype=CONTENT_TYPE_LATEST)
         return Response(generate_latest(registry), mimetype=CONTENT_TYPE_LATEST)
-

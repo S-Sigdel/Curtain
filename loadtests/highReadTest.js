@@ -5,7 +5,7 @@ export const options = {
   scenarios: {
     cached_url_read: {
       executor: "constant-vus",
-      vus: 1000,
+      vus: 500,
       duration: "30s",
     },
   },

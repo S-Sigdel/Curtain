@@ -10,6 +10,7 @@ The incident-response stack adds:
 - a notifier service that polls Prometheus firing alerts every 15 seconds
 - a small Discord relay service that converts internal alert webhooks into Discord webhook posts
 - Grafana for the visual command-center dashboard
+- PromLens for sub-second Prometheus query exploration and spike demos
 
 Services are defined in [docker-compose.yml](/home/pacific/Programming/hackathons/Curtain/docker-compose.yml).
 
@@ -17,9 +18,24 @@ Services are defined in [docker-compose.yml](/home/pacific/Programming/hackathon
 
 - Prometheus: `http://localhost:9090`
 - Grafana: `http://localhost:3000`
+- PromLens: `http://localhost:8081`
 - Manual relay test: `http://localhost:8080/alert`
 - App metrics: `http://localhost:5000/metrics`
 - Public health check: `http://localhost:5000/health`
+
+## PromLens Quick Start
+
+PromLens is bundled next to Prometheus so you can showcase second-level spikes without waiting for Grafana refresh windows.
+
+1. `docker compose up --build -d` (PromLens depends on the main stack).
+2. Visit `http://localhost:8081` from the host.
+3. The default data source is pre-set to `http://localhost:9090` (so your browser can reach the Prometheus port directly). If you run the stack on a remote host, type the reachable URL manually (for example `http://host.docker.internal:9090`).
+4. Execute queries such as:
+   - `rate(http_requests_total{job="curtain-app"}[5s])`
+   - `sum by (instance) (rate(nginx_http_requests_total[5s]))`
+5. Use the 1-second auto-refresh toggle for live spikes while your load test runs.
+
+Because PromLens pulls directly from Prometheus, any reduced `scrape_interval` you configure will be reflected instantly when demoing traffic bursts.
 
 ## Alert Rules
 

@@ -55,7 +55,8 @@ def test_list_urls_rejects_invalid_user_id_query(client):
     }
 
 
-def test_redirect_short_code_records_redirect_event(integration_client):
+def test_redirect_short_code_calls_record_click(integration_client):
+    # When Redis is healthy, record_click handles the write; no DB event row.
     url = Url.create(
         short_code="click1",
         original_url="https://example.com/tracked",
@@ -64,7 +65,27 @@ def test_redirect_short_code_records_redirect_event(integration_client):
         updated_at=datetime(2026, 1, 1, 0, 0, 0),
     )
 
-    integration_client.get("/r/click1")
+    with patch("app.routes.url_shortener.record_click", return_value=True) as mock_rc:
+        integration_client.get("/r/click1")
+
+    mock_rc.assert_called_once()
+    assert mock_rc.call_args[0][0] == "click1"
+    assert Event.select().where(Event.url_id == url.id).count() == 0
+
+
+def test_redirect_short_code_falls_back_to_db_when_redis_down(integration_client):
+    # When record_click returns False (all shards unreachable), the route writes
+    # an Event row directly so the click is never silently lost.
+    url = Url.create(
+        short_code="click2",
+        original_url="https://example.com/fallback",
+        is_active=True,
+        created_at=datetime(2026, 1, 1, 0, 0, 0),
+        updated_at=datetime(2026, 1, 1, 0, 0, 0),
+    )
+
+    with patch("app.routes.url_shortener.record_click", return_value=False):
+        integration_client.get("/r/click2")
 
     events = list(Event.select().where(Event.url_id == url.id))
     assert len(events) == 1
