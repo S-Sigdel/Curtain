@@ -1,18 +1,20 @@
 # Incident Response
 
-This document describes the monitoring stack that supports an alert being sent to discord and an grafana dashboard.
+Curtain includes a local incident-response stack built around Prometheus, Grafana, an alert notifier, and a Discord relay.
 
 ## Stack
 
-The incident-response stack adds:
-
-- Prometheus for metric scraping and alert evaluation
-- a notifier service that polls Prometheus firing alerts every 15 seconds
-- a small Discord relay service that converts internal alert webhooks into Discord webhook posts
-- Grafana for the visual command-center dashboard
+- Prometheus scrapes `/metrics` from `app` and `app2` for metric scraping and alert evaluation
+- Grafana displays the `Curtain Command Center` dashboard for the visual command-center dashboard
+- `notifier` polls Prometheus alert state every 15 seconds
+- `discord_relay` receives internal alert payloads and forwards them to Discord
 - PromLens for sub-second Prometheus query exploration and spike demos
 
-Services are defined in [docker-compose.yml](/home/pacific/Programming/hackathons/Curtain/docker-compose.yml).
+Relevant files:
+
+- [docker-compose.yml](/home/pacific/Programming/hackathons/Curtain/docker-compose.yml)
+- [monitoring/prometheus.yml](/home/pacific/Programming/hackathons/Curtain/monitoring/prometheus.yml)
+- [monitoring/alerts.yml](/home/pacific/Programming/hackathons/Curtain/monitoring/alerts.yml)
 
 ## Endpoints
 
@@ -60,78 +62,3 @@ The notifier posts new firing alerts to the internal relay at `http://discord_re
 The relay then forwards the alert message to the Discord webhook stored in `DISCORD_WEBHOOK_URL`.
 
 For local verification from the host, the relay is also exposed at `http://localhost:8080/alert`.
-
-Relevant files:
-
-- [monitoring/prometheus_notifier.py](/home/pacific/Programming/hackathons/Curtain/monitoring/prometheus_notifier.py)
-- [monitoring/discord_webhook_relay.py](/home/pacific/Programming/hackathons/Curtain/monitoring/discord_webhook_relay.py)
-- [monitoring/grafana/dashboards/curtain-command-center.json](/home/pacific/Programming/hackathons/Curtain/monitoring/grafana/dashboards/curtain-command-center.json)
-- [docs/RUNBOOK.md](/home/pacific/Programming/hackathons/Curtain/docs/RUNBOOK.md)
-- [docs/SHERLOCK_MODE.md](/home/pacific/Programming/hackathons/Curtain/docs/SHERLOCK_MODE.md)
-
-## Fire Drill
-
-Start the full stack:
-
-```bash
-docker compose up --build -d
-```
-
-### Service Down
-
-Stop both app instances:
-
-```bash
-docker compose stop app app2
-```
-
-Expected outcome:
-
-- Prometheus loses all `curtain-app` scrape targets
-- `CurtainServiceDown` enters firing state after 1 minute
-- Discord receives a notification shortly after
-
-Bring the service back:
-
-```bash
-docker compose start app app2
-```
-
-### High Error Rate
-
-The app exposes a gated drill endpoint at `GET /debug/fail`.
-It only returns a `500` when `ENABLE_INCIDENT_DEBUG_ROUTES=true`.
-
-If you change that flag in `.env`, recreate the app containers before running the drill:
-
-```bash
-docker compose up -d --force-recreate app app2 nginx
-```
-
-Generate sustained failures:
-
-```bash
-docker run --rm \
-  --network curtain_default \
-  -e BASE_URL=http://nginx \
-  -v "$PWD/loadtests:/loadtests" \
-  grafana/k6 run /loadtests/errorRateTest.js
-```
-
-Expected outcome:
-
-- the app emits `500` responses for at least 2 minutes
-- `CurtainHighErrorRate` enters firing state
-- Discord receives a notification
-
-## Verification Commands
-
-```bash
-docker compose ps
-docker compose logs -f prometheus
-docker compose logs -f notifier
-docker compose logs -f discord_relay
-curl -s http://localhost:9090/api/v1/rules
-curl -s http://localhost:9090/api/v1/alerts
-curl -i http://localhost:8080/health
-```

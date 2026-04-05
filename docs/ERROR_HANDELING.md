@@ -1,10 +1,10 @@
 # Error Handling
 
-This document describes the JSON error responses returned by the app.
+Curtain does not use a single error envelope for every route. The current implementation has two main response shapes.
 
-## Response Shape
+## Response Shapes
 
-Errors are returned as JSON objects with an `error` field:
+Most routes return:
 
 ```json
 {
@@ -12,56 +12,53 @@ Errors are returned as JSON objects with an `error` field:
 }
 ```
 
-## Current Behaviors
+`/users` validation routes return:
 
-### 400 Bad Request
+```json
+{
+  "errors": {
+    "field_name": "message here"
+  }
+}
+```
 
-Returned when the request is syntactically acceptable but invalid for the endpoint logic.
+## Current Status Codes
+
+### `400 Bad Request`
+
+Used by URL and event routes for invalid request bodies, invalid query params, and invalid foreign-key references on URL creation.
 
 Examples:
 
-- `POST /urls` without `original_url`
-- malformed JSON that results in no usable `original_url`
-- database integrity failures such as an invalid `user_id`
-- invalid query parameters such as `GET /urls?user_id=abc`
-- invalid query parameters such as `GET /events?url_id=abc`
+- missing `original_url`
+- invalid `user_id` on `POST /urls`
+- invalid `url_id` on `GET /events`
+- invalid `is_active` on `GET /urls`
 
-Typical response:
+### `404 Not Found`
 
-```json
-{
-  "error": "Field 'original_url' is required"
-}
-```
-
-### 404 Not Found
-
-Returned when the route or short URL does not exist.
+Used for unknown routes and missing resources.
 
 Examples:
 
-- unknown application route
-- missing URL resource ID
+- unknown Flask route
+- missing URL
+- missing event
+- disabled `/debug/fail`
 
-Typical responses:
+### `422 Unprocessable Entity`
 
-```json
-{
-  "error": "Not found"
-}
-```
+Used by `POST /users` and `PUT /users/<id>` validation.
 
-```json
-{
-  "error": "URL not found"
-}
-```
+Examples:
 
-### 500 Internal Server Error
+- missing `username`
+- invalid email format
+- duplicate email on user creation
 
-Returned for unhandled exceptions inside the app.
+### `500 Internal Server Error`
 
-Typical response:
+Used for uncaught exceptions. The app logs the failure and returns:
 
 ```json
 {
@@ -69,19 +66,11 @@ Typical response:
 }
 ```
 
-### 503 Service Unavailable
+## Dependency Behavior
 
-Returned when Redis is unavailable during short-code generation.
+- PostgreSQL failures generally surface as `500`
+- counter Redis failures during short-code generation fall back to PostgreSQL-based code allocation
+- cache Redis failures behave like cache misses
+- click-counter shard failures are swallowed in the redirect path so the redirect can still succeed
 
-Typical response:
-
-```json
-{
-  "error": "Short URL generation is temporarily unavailable."
-}
-```
-
-## Notes
-
-- The app is designed to return JSON errors instead of Flask HTML error pages.
-- Redis is currently used for short-code generation when creating URL rows.
+There is no current `503` path for Redis unavailability in the URL-shortening flow.

@@ -1,68 +1,54 @@
-#   Diagnost Errors
+# Diagnose Errors
 
-This document shows how to diagnose a fake incident using only the dashboard and logs.
+This document describes how to diagnose a service outage using the current dashboard, logs, and container topology.
 
 ## Scenario
 
-We simulate a real outage by stopping both app containers:
+Simulate a full app-tier outage:
 
 ```bash
 docker compose stop app app2
 ```
 
-## What The Dashboard Shows
+## What Grafana Should Show
 
-Open Grafana at `http://localhost:3000` and load `Curtain Command Center`.
+Open `http://localhost:3000` and load `Curtain Command Center`.
 
-Expected signal changes:
+Typical signals:
 
-- `Traffic` falls toward zero because requests stop being served
-- `Error Rate` may spike briefly if Nginx continues receiving requests without healthy upstreams
-- `Latency p95` becomes less useful during a total outage because successful request volume collapses
-- `Saturation` drops because the app processes are no longer running
+- traffic drops toward zero
+- error rate may spike because Nginx loses healthy upstreams
+- latency becomes less meaningful once successful traffic collapses
+- saturation falls as app processes stop serving requests
 
-## What The Logs Show
-
-Check container state first:
+## What To Check Next
 
 ```bash
 docker compose ps
+docker compose logs --tail=100 app app2 nginx prometheus notifier discord_relay
+curl -s http://localhost:9090/api/v1/alerts
 ```
 
-Then inspect logs:
+Useful conclusions:
 
-```bash
-docker compose logs --tail=100 nginx prometheus notifier discord_relay
-```
+- if both app containers are down, the app tier is the fault domain
+- if Prometheus is still up and firing alerts, the monitoring path is healthy
+- if relay and notifier logs show forwarded alerts, the notification path is healthy
 
-What you should see:
+## Root Cause Pattern
 
-- `app` and `app2` are stopped or missing from the running set
-- Prometheus reports the `CurtainServiceDown` alert as firing
-- notifier forwards the alert batch
-- Discord relay logs `alert.received` and `discord.forwarded`
-
-## Root Cause
-
-The outage is caused by the application tier being unavailable, not by the alerting pipeline or Grafana. Prometheus can no longer scrape any `curtain-app` targets, which triggers `CurtainServiceDown`, and the dashboard confirms the same failure pattern through collapsing traffic and saturation.
+When both `app` and `app2` are unavailable, Prometheus loses all `curtain-app` targets and `CurtainServiceDown` fires. Nginx may continue answering with `502`, but the failure is still in the application tier, not in Grafana or the alerting components.
 
 ## Recovery
 
-Bring the app tier back:
-
 ```bash
 docker compose start app app2
-```
-
-Then verify:
-
-```bash
 curl -i http://localhost:5000/health
 curl -s http://localhost:9090/api/v1/alerts
 ```
 
-Expected result:
+Expected results:
 
 - `/health` returns `200`
-- traffic returns in Grafana
-- the alert clears after Prometheus sees healthy targets again
+- Grafana traffic recovers
+- the active alert clears after healthy scrapes resume

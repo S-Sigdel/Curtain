@@ -1,220 +1,250 @@
 # Curtain
 
-A Flask + Peewee + PostgreSQL service for URL shortening, management, events, analytics, and load-testing experiments.
+Curtain is a Flask service for URL shortening, redirect tracking, analytics, and incident-response demos. The current runtime architecture uses PostgreSQL for durable data, Redis for counters and cache, sharded Redis instances for real-time click collection, Nginx for load balancing, and Prometheus/Grafana for monitoring.
 
-**Stack:** Flask · Peewee ORM · PostgreSQL · uv
+## Architecture Diagram
 
-## Prerequisites
+```mermaid
+flowchart TD
+    U[User / Client]
+    N[Nginx<br/>Load Balancer]
+    A1[app<br/>Flask + Gunicorn]
+    A2[app2<br/>Flask + Gunicorn]
+    PG[(PostgreSQL)]
+    RC[(redis<br/>URL Counter)]
+    CACHE[(redis_cache<br/>URL + Analytics Cache)]
+    S0[(redis_shard0<br/>Clicks + Streams)]
+    S1[(redis_shard1<br/>Clicks + Streams)]
+    SC[stream_consumer]
+    P[Prometheus]
+    G[Grafana]
+    NT[notifier]
+    DR[discord_relay]
+    D[Discord Webhook]
 
-- `git` installed
-- Docker + Docker Compose
-- Optional for local non-Docker runs: `uv` and PostgreSQL
+    U -->|HTTP| N
+    N --> A1
+    N --> A2
 
-## uv Basics
+    A1 -->|DB reads/writes| PG
+    A2 -->|DB reads/writes| PG
 
-`uv` manages your Python version, virtual environment, and dependencies automatically — no manual `python -m venv` needed.
+    A1 -->|short-code counter| RC
+    A2 -->|short-code counter| RC
 
-| Command | What it does |
-|---------|--------------|
-| `uv sync` | Install all dependencies (creates `.venv` automatically) |
-| `uv run <script>` | Run a script using the project's virtual environment |
-| `uv add <package>` | Add a new dependency |
-| `uv remove <package>` | Remove a dependency |
+    A1 -->|cache lookup / populate| CACHE
+    A2 -->|cache lookup / populate| CACHE
+
+    CACHE -.->|cache miss -> DB| PG
+
+    A1 -->|redirect click writes| S0
+    A1 -->|redirect click writes| S1
+    A2 -->|redirect click writes| S0
+    A2 -->|redirect click writes| S1
+
+    S0 -->|Redis Streams| SC
+    S1 -->|Redis Streams| SC
+    SC -->|batched redirect events| PG
+
+    A1 -->|/metrics| P
+    A2 -->|/metrics| P
+    P --> G
+    P -->|alert polling| NT
+    NT -->|alert batch| DR
+    DR --> D
+```
 
 ## Build Instructions
 
+### Prerequisites
+
+- Docker and Docker Compose
+- Optional for local non-Docker runs: `uv`, Python 3.13, PostgreSQL, and Redis
+
+### Start the Full Stack
+
 ```bash
-# 1. Clone the repository
-git clone git@github.com:S-Sigdel/Curtain.git
-cd Curtain
-
-# 2. Configure environment
-cp .env.example .env
-
-# 3. Build and start all services
 docker compose up --build -d
-
-# 4. Verify
 curl http://localhost:5000/health
-# → {"status":"ok"}
 ```
 
-If you want seeded challenge data, run this after the stack is up:
+### Seed Challenge Data
 
 ```bash
 docker compose exec app uv run python scripts/reset_db.py
 docker compose exec app uv run python scripts/seed_csv.py
 ```
 
-## Docker Quick Start
+### Local Python Workflow
 
 ```bash
-docker compose up --build -d
-docker compose exec app uv run python scripts/reset_db.py
-docker compose exec app uv run python scripts/seed_csv.py
-curl http://localhost:5000/health
+uv sync --dev
+uv run python run.py
 ```
 
-If you change Python code while Docker is already running, restart the app service so Gunicorn reloads the updated routes:
+## [IMPORTANT] Evidence of Hackathon Quest
 
-```bash
-docker compose restart app app2 nginx
-```
+- Reliability: [evidence/RELIABILITY_EVIDENCE.md](evidence/RELIABILITY_EVIDENCE.md)
+- Scalability: [evidence/SCALABILITY_EVIDENCE.md](evidence/SCALABILITY_EVIDENCE.md)
+- Incident response: [evidence/INCIDENT_RESPONSE_EVIDENCE.md](evidence/INCIDENT_RESPONSE_EVIDENCE.md)
 
-## [IMPORTANT] Evidence of Hackathon Quest Logs
-All the evidence of each Quests are logged properly in the `evidence/` directory along with the related screenshots as follows:
+## Current Architecture
 
-- Reliability Engineering (up to Gold tier done): [./evidence/RELIABILITY_EVIDENCE.md](./evidence/RELIABILITY_EVIDENCE.md)
-- Scalability Engineering (up to Gold tier done): [./evidence/SCALABILITY_EVIDENCE.md](./evidence/SCALABILITY_EVIDENCE.md)
-- Incident Response (up to Gold tier done): [./evidence/INCIDENT_RESPONSE_EVIDENCE.md](./evidence/INCIDENT_RESPONSE_EVIDENCE.md)
+### Application Layer
 
+- Two Flask app containers: `app` and `app2`
+- Each app container runs Gunicorn with 2 workers
+- Nginx fronts both app containers and exposes the service on `http://localhost:5000`
+
+### Data Layer
+
+- PostgreSQL stores `users`, `urls`, and `events`
+- `redis` stores the monotonic URL counter used for short-code generation
+- `redis_cache` stores cached JSON responses
+- `redis_shard0` and `redis_shard1` store sharded redirect counters, hourly buckets, HyperLogLog unique-visitor sketches, and Redis Streams entries
+
+### Background and Monitoring Services
+
+- `stream_consumer` drains Redis Streams and writes redirect events to PostgreSQL
+- `prometheus` scrapes `/metrics` from both app containers
+- `grafana` visualizes app and incident-response metrics
+- `notifier` polls Prometheus alerts and forwards new firing alerts
+- `discord_relay` translates internal alert payloads into Discord webhook posts
+
+## Request Flow
+
+### URL Creation
+
+1. `POST /urls` validates the request body.
+2. The app tries to allocate the next short code from Redis key `url:counter`.
+3. If the counter Redis is unavailable, the app falls back to PostgreSQL max-id state.
+4. The new URL is persisted in PostgreSQL.
+5. A `created` event is written to PostgreSQL.
+6. Related cache keys are invalidated.
+
+### Redirects
+
+1. `GET /r/<short_code>` or the alias redirect routes resolve the URL, using cached redirect metadata when available.
+2. The app records the click into the owning Redis shard:
+   - total counter
+   - hourly bucket
+   - HyperLogLog unique visitors
+   - Redis Stream append
+3. The app writes an immediate `redirect` event to PostgreSQL.
+4. The client receives a `302` redirect to the original URL.
+
+### Analytics and Cached Reads
+
+- `GET /urls`
+- `GET /urls/<id>`
+- `GET /urls/<id>/analytics`
+
+These routes use `redis_cache` as a read-through cache and return `X-Cache: HIT`, `MISS`, or `BYPASS` depending on the path.
+
+## API Surface
+
+### Core Routes
+
+- `GET /health`
+- `GET /metrics`
+- `GET /`
+- `POST /shorten-ui`
+
+### Users
+
+- `POST /users/bulk`
+- `GET /users`
+- `GET /users/<id>`
+- `POST /users`
+- `PUT /users/<id>`
+- `DELETE /users/<id>`
+
+### URLs
+
+- `POST /urls`
+- `GET /urls`
+- `GET /urls/<id>`
+- `PUT /urls/<id>`
+- `DELETE /urls/<id>`
+- `GET /r/<short_code>`
+- `GET /urls/short/<short_code>`
+- `GET /urls/<short_code>/redirect`
+
+### Events and Analytics
+
+- `GET /events`
+- `GET /events/<id>`
+- `POST /events`
+- `GET /urls/<id>/analytics`
+
+## Environment Variables
+
+Common settings are listed in [`.env.example`](.env.example).
+
+Important runtime variables:
+
+- `DATABASE_URL`
+- `REDIS_URL`
+- `CACHE_REDIS_URL`
+- `REDIS_SHARDS`
+- `ENABLE_INCIDENT_DEBUG_ROUTES`
+- `DISCORD_WEBHOOK_URL`
+- `GRAFANA_ADMIN_USER`
+- `GRAFANA_ADMIN_PASSWORD`
 
 ## Testing
 
-Run the test suite locally with:
+Run the test suite locally:
 
 ```bash
 uv sync --dev
 uv run pytest --cov=app --cov-report=term-missing
 ```
 
-If you are using Docker:
+Run it inside Docker:
 
 ```bash
 docker compose exec app uv sync --dev
 docker compose exec app uv run pytest -q
 ```
 
-## Observability
+## Project Structure
 
-If you want to view the structured logs without using SSH and also want to know how to check the matrices, then please refer to the file [./docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md)
-
-## Incident Response
-
-If you want to know how we handle an alert incidence or any other kind of incidence and the tools we are using for them then please refer to the file [./docs/INCIDENT_RESPONSE.md](./docs/INCIDENT_RESPONSE.md)
-
-## Scaling Verification
-
-This project scales with two app containers (`app`, `app2`) behind Nginx.
-
-Quick check:
-
-```bash
-docker compose ps
+```text
+Curtain/
+├── app/
+│   ├── __init__.py
+│   ├── cache.py
+│   ├── database.py
+│   ├── observability.py
+│   ├── redis_client.py
+│   ├── shard_ring.py
+│   ├── stream_consumer.py
+│   ├── models/
+│   ├── routes/
+│   ├── services/
+│   └── templates/
+├── docs/
+├── evidence/
+├── loadtests/
+├── monitoring/
+├── nginx/
+├── scripts/
+├── tests/
+├── docker-compose.yml
+├── gunicorn.conf.py
+├── pyproject.toml
+└── run.py
 ```
-
-Run the baseline 200-user load test:
-
-```bash
-docker run --rm \
-  --network curtain_default \
-  -e BASE_URL=http://nginx \
-  -v "$PWD/loadtests:/loadtests" \
-  grafana/k6 run /loadtests/loadTest.js
-```
-
-For full load-testing procedures, pass criteria, and additional k6 scenarios, see [docs/LOAD_TESTING.md](./docs/LOAD_TESTING.md).
-
-CI runs the same pytest suite on every push and pull request via [.github/workflows/tests.yml](./.github/workflows/tests.yml).
 
 ## Documentation
 
-- API request/response examples: [docs/API_EXAMPLES.md](./docs/API_EXAMPLES.md)
-- Error-handling behavior: [docs/ERROR_HANDELING.md](./docs/ERROR_HANDELING.md)
-- Failure scenarios and mitigations: [docs/FAILURE_MODES.md](./docs/FAILURE_MODES.md)
-- Incident response setup and drills: [docs/INCIDENT_RESPONSE.md](./docs/INCIDENT_RESPONSE.md)
-- Root-cause diagnosis workflow: [docs/DIAGNOST_ERRORS.md](./docs/DIAGNOST_ERRORS.md)
-- Load testing and scaling verification: [docs/LOAD_TESTING.md](./docs/LOAD_TESTING.md)
-- Logs, metrics, and observability checks: [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md)
-- Operational runbook : [docs/RUNBOOK.md](./docs/RUNBOOK.md)
-- Redis behavior and caching notes: [docs/REDIS_INFO.md](./docs/REDIS_INFO.md)
-
-## API highlights
-
-- `POST /users`, `GET /users`, `GET /users/<id>`, `PUT /users/<id>`
-- `POST /urls`, `GET /urls`, `GET /urls/<id>`, `PUT /urls/<id>`
-- `GET /events`, `GET /urls/<id>/analytics`
-
-## New User Flow
-
-`POST /urls` only accepts a `user_id` that already exists in the `users` table. If the caller is a brand-new user, create the user first and then use the returned `id` when creating the URL.
-
-```bash
-curl -X POST http://localhost:5000/users \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "newuser",
-    "email": "newuser@example.com"
-  }'
-```
-
-```bash
-curl -X POST http://localhost:5000/urls \
-  -H "Content-Type: application/json" \
-  -d '{
-    "user_id": 1,
-    "original_url": "https://example.com/test",
-    "title": "Test URL"
-  }'
-```
-
-If `user_id` is omitted, URL creation is still allowed because `urls.user_id` is nullable.
-
-
-## Project Structure
-
-```
-Curtain/
-├── app/
-│   ├── __init__.py          # App factory (create_app)
-│   ├── database.py          # DatabaseProxy, BaseModel, connection hooks
-│   ├── models/
-│   │   └── __init__.py      # Registers User, Url, and Event models
-│   └── routes/
-│       └── __init__.py      # Registers users, urls, and events routes
-├── docs/                    # API examples, failure modes, error handling
-├── loadtests/               # k6 scripts
-├── scripts/
-│   ├── init_db.py           # Create tables if they do not exist
-│   ├── reset_db.py          # Drop and recreate challenge tables
-│   └── seed_csv.py          # Load users.csv, urls.csv, events.csv
-├── users.csv                # Seed data
-├── urls.csv                 # Seed data
-├── events.csv               # Seed data
-├── docker-compose.yml       # App, Postgres, and Redis services
-├── .env.example             # DB connection template
-├── .gitignore               # Python + uv gitignore
-├── .python-version          # Pin Python version for uv
-├── pyproject.toml           # Project metadata + dependencies
-├── run.py                   # Entry point: uv run run.py
-└── README.md
-```
-
-## Current Schema
-
-The provided CSVs map to these tables:
-
-- `users`: `id`, `username`, `email`, `created_at`
-- `urls`: `id`, `user_id`, `short_code`, `original_url`, `title`, `is_active`, `created_at`, `updated_at`
-- `events`: `id`, `url_id`, `user_id`, `event_type`, `timestamp`, `details`
-
-Primary keys use auto-incrementing IDs for app-created rows. The seed script inserts the explicit IDs from the CSV files, and PostgreSQL continues from the highest seeded value after that.
-
-## Database Scripts
-
-- `uv run python scripts/init_db.py`
-Creates the three challenge tables if they do not exist.
-
-- `uv run python scripts/reset_db.py`
-Drops and recreates the three challenge tables. Use this when the schema drifted or tables were created incorrectly.
-
-- `uv run python scripts/seed_csv.py`
-Loads `users.csv`, `urls.csv`, and `events.csv` into PostgreSQL. Re-running it is safe for existing IDs because inserts use conflict ignore.
-
-
-## Tips
-
-- Use `model_to_dict` from `playhouse.shortcuts` to convert model instances to dictionaries for JSON responses.
-- Wrap bulk inserts in `db.atomic()` for transactional safety and performance.
-- The template uses `teardown_appcontext` for connection cleanup, so connections are closed even when requests fail.
-- Check `.env.example` for all available configuration options.
+- API examples: [docs/API_EXAMPLES.md](docs/API_EXAMPLES.md)
+- Error handling: [docs/ERROR_HANDELING.md](docs/ERROR_HANDELING.md)
+- Failure modes: [docs/FAILURE_MODES.md](docs/FAILURE_MODES.md)
+- Incident response: [docs/INCIDENT_RESPONSE.md](docs/INCIDENT_RESPONSE.md)
+- Root-cause diagnosis: [docs/DIAGNOST_ERRORS.md](docs/DIAGNOST_ERRORS.md)
+- Load testing: [docs/LOAD_TESTING.md](docs/LOAD_TESTING.md)
+- Observability: [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)
+- Runbook: [docs/RUNBOOK.md](docs/RUNBOOK.md)
+- Redis details: [docs/REDIS_INFO.md](docs/REDIS_INFO.md)

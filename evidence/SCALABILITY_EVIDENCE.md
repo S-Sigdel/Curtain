@@ -1,20 +1,54 @@
 # Scalability Engineering Quest Evidence
-We have completed the scalability engineering quest up to the gold level, and we used `k6` to simulate concurrent users. We are using `Nginx` to load-balance two instances of our app container, and we are also using `Redis` to generate unique short-form URLs by using it as a counter. In addition to the database, we use `Redis` to keep a time-to-live (TTL) cache of the most-used short URLs to make access faster. We have also cached analytics.
+
+This document maps the current Curtain implementation to the Scalability Engineering quest tiers and links the supporting documentation for each tier.
 
 ## Bronze Evidence
-Below is the image showing 50 concurrent users hitting our program.
+
+Bronze is the baseline: run a load test, simulate 50 concurrent users, and record latency and error-rate behavior.
+
+Below is the screenshot showing the 50-user load-test run.
 ![Bronze Evidence](../docs/images/scalability/bronze_scale_evidence.png)
 
+This run establishes the baseline before scale-out and caching work. The terminal output captures the k6 summary, including the measured latency distribution and error-rate metrics used as the starting point for later optimizations.
+
+Relevant docs:
+
+- [../docs/LOAD_TESTING.md](../docs/LOAD_TESTING.md) explains the available k6 scripts and how the baseline load tests are run.
+- [../README.md](../README.md) documents how to start the stack before running load tests.
+
 ## Silver Evidence
-Below is the image showing 200 concurrent users hitting our program.
+
+Silver is about horizontal scale-out: 200 concurrent users, multiple app instances, and Nginx load balancing while keeping latency under control.
+
+Below is the screenshot showing the 200-user load-test run.
 ![Silver 200 User Evidence](../docs/images/scalability/silver_scale_200.png)
 
-Below is the image showing two instances of our app running (curtain-app2-1 and curtain-app-1) along with `curtain-nginx-1` which is working as the load balancer for the two instances.
+Below is the screenshot showing two app containers plus the Nginx load balancer in Docker.
 ![Silver multiple instances Evidence](../docs/images/scalability/silver_scale_docker_ps.png)
 
+These prove that the service was scaled horizontally with multiple app instances and a dedicated traffic-splitting layer, rather than relying on a single container.
+
+Relevant docs:
+
+- [../docs/LOAD_TESTING.md](../docs/LOAD_TESTING.md) documents the load-test entrypoints and the scaled runtime topology.
+- [../README.md](../README.md) summarizes the current architecture, including the dual app containers and Nginx front door.
+
 ## Gold Evidence
-Below is the image showing 500 concurrent users hitting our program.
+
+Gold is about caching, bottleneck reduction, and surviving high-concurrency traffic with a low error rate.
+
+Below is the screenshot showing the 500-user load-test run.
 ![Gold 500 User Evidence](../docs/images/scalability/gold_scale_500.png)
 
-Below is the image showing the analytics for `url_id:1` being cached. In the first curl request, `X-Cache` is `MISS`, which means the result was not found in the cache and had to be fetched from PostgreSQL. In the second curl request, `X-Cache` is `HIT`, which means after the first `MISS`, the result was cached in `Redis` and then found there on the second call. This proves that the caching mechanism is working.
+Below is the screenshot showing analytics caching behavior. The first request returns `X-Cache: MISS`, and the follow-up request returns `X-Cache: HIT`, proving that the hot read path is being served from Redis-backed cache instead of recomputing from PostgreSQL on every request.
 ![Gold Redis Cache Evidence](../docs/images/scalability/gold_scale_cache.png)
+
+Bottleneck report:
+
+Before optimization, repeated read-heavy endpoints were limited by unnecessary PostgreSQL work and repeated aggregation on hot paths. The fix was to add Redis-backed caching for URL list/detail and analytics reads, while also keeping two app instances behind Nginx so traffic is split across multiple workers instead of concentrating on one process.
+
+Relevant docs:
+
+- [../docs/REDIS_INFO.md](../docs/REDIS_INFO.md) explains the Redis roles used for caching, counters, and sharded redirect tracking.
+- [../docs/LOAD_TESTING.md](../docs/LOAD_TESTING.md) documents the higher-concurrency test scenarios and what to watch during them.
+- [../README.md](../README.md) describes the current scaled architecture and the cache-backed read flow.
