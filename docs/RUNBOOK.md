@@ -7,6 +7,7 @@ This is the incident guide for Curtain.
 Use this runbook when one of the incident-response alerts fires:
 
 - `CurtainServiceDown`
+- `CurtainInstanceDown`
 - `CurtainHighErrorRate`
 
 ## Quick Links
