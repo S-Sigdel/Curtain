@@ -47,9 +47,38 @@
 
     <hr style="margin-top: 40px;">
     <h2>Reference</h2>
+    <h3>URLs</h3>
     <ul>
-        <li>API POST: <code>/urls</code></li>
-        <li>API GET: <code>/urls/&lt;id&gt;</code></li>
+        <li><code>POST /urls</code> — create a short URL</li>
+        <li><code>GET /urls</code> — list all URLs</li>
+        <li><code>GET /urls/&lt;id&gt;</code> — get URL by ID</li>
+        <li><code>PUT /urls/&lt;id&gt;</code> — update URL</li>
+        <li><code>DELETE /urls/&lt;id&gt;</code> — delete URL</li>
+    </ul>
+    <h3>Redirect</h3>
+    <ul>
+        <li><code>GET /r/&lt;short_code&gt;</code> — redirect (short form)</li>
+        <li><code>GET /urls/short/&lt;short_code&gt;</code> — redirect (REST form)</li>
+        <li><code>GET /urls/&lt;short_code&gt;/redirect</code> — redirect (explicit)</li>
+    </ul>
+    <h3>Analytics</h3>
+    <ul>
+        <li><code>GET /urls/&lt;id&gt;/analytics</code> — click stats for a URL</li>
+        <li><code>GET /events</code> — list events</li>
+        <li><code>GET /events/&lt;id&gt;</code> — get event by ID</li>
+        <li><code>POST /events</code> — create event</li>
+    </ul>
+    <h3>Users</h3>
+    <ul>
+        <li><code>POST /users</code> — create user</li>
+        <li><code>GET /users</code> — list users</li>
+        <li><code>GET /users/&lt;id&gt;</code> — get user by ID</li>
+        <li><code>PUT /users/&lt;id&gt;</code> — update user</li>
+        <li><code>DELETE /users/&lt;id&gt;</code> — delete user</li>
+        <li><code>POST /users/bulk</code> — bulk import users (CSV)</li>
+    </ul>
+    <h3>System</h3>
+    <ul>
         <li>Health: <a href="/health"><code>/health</code></a></li>
         <li>Metrics: <a href="/metrics"><code>/metrics</code></a></li>
     </ul>
