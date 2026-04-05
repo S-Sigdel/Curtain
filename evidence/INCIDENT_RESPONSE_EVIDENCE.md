@@ -48,7 +48,7 @@ Below is a screenshot of the Grafana dashboard while the system is under load.
 ![Grafana Dashboard](../docs/images/incident_response/Gold_incident_dashboard_grafana.png)
 
 This dashboard is used to track the key operational signals needed for debugging, including request latency, traffic volume, error behavior, and process-level saturation indicators.
-We cross-verified the Grafana dashboard configuration and it includes panels for `p95 Latency`, `Total Traffic`, `Error Rate`, and `System Saturation — CPU & Memory per Instance`, which gives us the required dashboard coverage for latency, traffic, errors, and saturation.
+The Grafana dashboard configuration includes panels for `p95 Latency`, `Total Traffic`, `Error Rate`, `System Saturation — CPU & Memory per Instance`, `Healthy Instances`, `Live Traffic per Instance`, `Traffic by Endpoint Type`, `Latency Percentiles (p50/p95/p99)`, and `Redis Shard Failures and Failovers` which gives us the required dashboard coverage for latency, traffic, errors, and saturation.
 
 Runbook:
 
