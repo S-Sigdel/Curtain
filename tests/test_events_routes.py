@@ -3,8 +3,6 @@ from unittest.mock import patch
 
 from app.models import Event, Url, User
 
-_ZERO_REALTIME = {"total_clicks": 0, "unique_visitors": 0, "hourly": {}}
-
 
 def test_list_events_returns_serialized_events(integration_client):
     now = datetime(2026, 1, 1, 0, 0, 0)
@@ -185,21 +183,22 @@ def test_url_analytics_returns_event_counts(integration_client):
         ]
     ).execute()
 
-    with patch("app.routes.events.get_click_stats", return_value=_ZERO_REALTIME), \
-         patch("app.routes.events.get_cached_json", return_value=None):
-        response = integration_client.get(f"/urls/{url.id}/analytics")
+    response = integration_client.get(f"/urls/{url.id}/analytics")
 
     assert response.status_code == 200
-    body = response.get_json()
-    assert body["url_id"] == url.id
-    assert body["short_code"] == "abc123"
-    assert body["original_url"] == "https://example.com/1"
-    assert body["total_events"] == 3
-    assert body["click_count"] == 0
-    assert body["redirect_count"] == 0
-    assert body["event_counts"] == {"created": 1, "updated": 2}
-    assert body["latest_event_at"] == "2026-01-01T02:00:00"
-    assert body["realtime"] == _ZERO_REALTIME
+    assert response.get_json() == {
+        "url_id": url.id,
+        "short_code": "abc123",
+        "original_url": "https://example.com/1",
+        "total_events": 3,
+        "click_count": 0,
+        "redirect_count": 0,
+        "event_counts": {
+            "created": 1,
+            "updated": 2,
+        },
+        "latest_event_at": "2026-01-01T02:00:00",
+    }
 
 
 def test_url_analytics_returns_404_for_missing_url(integration_client):
@@ -207,6 +206,38 @@ def test_url_analytics_returns_404_for_missing_url(integration_client):
 
     assert response.status_code == 404
     assert response.get_json() == {"error": "URL not found"}
+
+
+def test_url_analytics_hides_extra_cached_fields(integration_client):
+    cached_payload = {
+        "url_id": 1,
+        "short_code": "abc123",
+        "original_url": "https://example.com/1",
+        "total_events": 3,
+        "click_count": 0,
+        "redirect_count": 0,
+        "event_counts": {"created": 1, "updated": 2},
+        "latest_event_at": "2026-01-01T02:00:00",
+        "realtime": {"total_clicks": 999},
+    }
+
+    with patch("app.routes.events.get_cached_json", return_value=cached_payload):
+        response = integration_client.get("/urls/1/analytics")
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "url_id": 1,
+        "short_code": "abc123",
+        "original_url": "https://example.com/1",
+        "total_events": 3,
+        "click_count": 0,
+        "redirect_count": 0,
+        "event_counts": {
+            "created": 1,
+            "updated": 2,
+        },
+        "latest_event_at": "2026-01-01T02:00:00",
+    }
 
 
 def test_list_events_rejects_invalid_query_params(client):
