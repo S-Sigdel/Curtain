@@ -1,26 +1,14 @@
 # Curtain
 
-A Flask + Peewee + PostgreSQL service for URL management, events, analytics, and load-testing experiments.
+A Flask + Peewee + PostgreSQL service for URL shortening, management, events, analytics, and load-testing experiments.
 
 **Stack:** Flask · Peewee ORM · PostgreSQL · uv
 
-## **Important**
-
-You need to work with around the seed files that you can find in [MLH PE Hackathon](https://mlh-pe-hackathon.com) platform. This will help you build the schema for the database and have some data to do some testing and submit your project for judging. If you need help with this, reach out on Discord or on the Q&A tab on the platform.
-
 ## Prerequisites
 
-- **uv** — a fast Python package manager that handles Python versions, virtual environments, and dependencies automatically.
-  Install it with:
-  ```bash
-  # macOS / Linux
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-
-  # Windows (PowerShell)
-  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-  ```
-  For other methods see the [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/).
-- PostgreSQL running locally (you can use Docker or a local instance)
+- `git` installed
+- Docker + Docker Compose
+- Optional for local non-Docker runs: `uv` and PostgreSQL
 
 ## uv Basics
 
@@ -33,33 +21,29 @@ You need to work with around the seed files that you can find in [MLH PE Hackath
 | `uv add <package>` | Add a new dependency |
 | `uv remove <package>` | Remove a dependency |
 
-## Quick Start
+## Build Instructions
 
 ```bash
-# 1. Clone the repo
-git clone git@github.com:S-Sigdel/Curtain.git && cd Curtain
+# 1. Clone the repository
+git clone git@github.com:S-Sigdel/Curtain.git
+cd Curtain
 
-# 2. Install dependencies
-uv sync
+# 2. Configure environment
+cp .env.example .env
 
-# 3. Create the database
-createdb hackathon_db
+# 3. Build and start all services
+docker compose up --build -d
 
-# 4. Configure environment
-cp .env.example .env   # edit if your DB credentials differ
-
-# 5. Reset the schema to match the challenge CSVs
-uv run python scripts/reset_db.py
-
-# 6. Seed the database
-uv run python scripts/seed_csv.py
-
-# 7. Run the server
-uv run run.py
-
-# 8. Verify
+# 4. Verify
 curl http://localhost:5000/health
 # → {"status":"ok"}
+```
+
+If you want seeded challenge data, run this after the stack is up:
+
+```bash
+docker compose exec app uv run python scripts/reset_db.py
+docker compose exec app uv run python scripts/seed_csv.py
 ```
 
 ## Docker Quick Start
@@ -76,6 +60,14 @@ If you change Python code while Docker is already running, restart the app servi
 ```bash
 docker compose restart app app2 nginx
 ```
+
+## [IMPORTANT] Evidence of Hackathon Quest Logs
+All the evidence of each Quests are logged properly in the `evidence/` directory along with the related screenshots as follows:
+
+- Reliability Engineering (up to Gold tier done): [./evidence/RELIABILITY_EVIDENCE.md](./evidence/RELIABILITY_EVIDENCE.md)
+- Scalability Engineering (up to Gold tier done): [./evidence/SCALABILITY_EVIDENCE.md](./evidence/SCALABILITY_EVIDENCE.md)
+- Incident Response (up to Gold tier done): [./evidence/INCIDENT_RESPONSE_EVIDENCE.md](./evidence/INCIDENT_RESPONSE_EVIDENCE.md)
+
 
 ## Testing
 
@@ -95,85 +87,23 @@ docker compose exec app uv run pytest -q
 
 ## Observability
 
-Structured application logs and Gunicorn access/error logs are emitted as JSON, and Prometheus-compatible metrics are exposed at `/metrics`.
-
-Quick checks:
-
-```bash
-curl http://localhost:5000/metrics
-docker compose logs -f app
-docker compose logs -f app2
-docker compose logs -f nginx
-```
-
-The metrics page includes request counters, request latency, process CPU time, and process memory usage. Log lines include timestamps, levels, request path, status code, and request duration.
+If you want to view the structured logs without using SSH and also want to know how to check the matrices, then please refer to the file [./docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md)
 
 ## Incident Response
 
-The Docker stack also includes Silver and Gold incident-response tooling:
-
-- Prometheus on `http://localhost:9090`
-- Prometheus notifier polling Prometheus alerts every 15 seconds
-- Discord notifications via `DISCORD_WEBHOOK_URL`
-- Manual relay test endpoint on `http://localhost:8080/alert`
-- Grafana on `http://localhost:3000`
-
-Set `DISCORD_WEBHOOK_URL` in `.env`, then start the full stack:
-
-```bash
-docker compose up --build -d
-```
-
-Alert rules included:
-
-- `CurtainServiceDown`
-- `CurtainHighErrorRate`
-
-command-center assets:
-
-- Grafana dashboard provisioning in [monitoring/grafana/dashboards/curtain-command-center.json](./monitoring/grafana/dashboards/curtain-command-center.json)
-- 3 AM runbook in [docs/RUNBOOK.md](./docs/RUNBOOK.md)
-- incident diagnosis walkthrough in [docs/SHERLOCK_MODE.md](./docs/SHERLOCK_MODE.md)
-
-Fire-drill commands:
-
-```bash
-# Service-down drill
-docker compose stop app app2
-
-# High-error-rate drill
-docker compose up -d --force-recreate app app2 nginx
-docker run --rm \
-  --network curtain_default \
-  -e BASE_URL=http://nginx \
-  -v "$PWD/loadtests:/loadtests" \
-  grafana/k6 run /loadtests/errorRateTest.js
-```
-
-The debug failure route used by `errorRateTest.js` is disabled by default and only returns `500` when `ENABLE_INCIDENT_DEBUG_ROUTES=true`.
-If you change that flag in `.env`, recreate `app`, `app2`, and `nginx` before running the drill.
+If you want to know how we handle an alert incidence or any other kind of incidence and the tools we are using for them then please refer to the file [./docs/INCIDENT_RESPONSE.md](./docs/INCIDENT_RESPONSE.md)
 
 ## Scaling Verification
 
-The Docker stack runs two app containers behind Nginx:
+This project scales with two app containers (`app`, `app2`) behind Nginx.
 
-- `app`
-- `app2`
-- `nginx`
-
-Check the running containers:
+Quick check:
 
 ```bash
 docker compose ps
-docker ps
 ```
 
-You should see:
-
-- 2 app containers: `curtain-app-1` and `curtain-app2-1`
-- 1 Nginx container: `curtain-nginx-1`
-
-Run the 200-concurrent-user baseline load test through Nginx:
+Run the baseline 200-user load test:
 
 ```bash
 docker run --rm \
@@ -183,53 +113,23 @@ docker run --rm \
   grafana/k6 run /loadtests/loadTest.js
 ```
 
-This script uses `constant-vus` with `vus: 200`, so it simulates 200 concurrent users for 30 seconds. It does not cap the test at a fixed 200 requests per second. The actual requests per second depend on latency and the script body.
-
-For read-based load tests, make sure the database has data first. The simplest path is to reseed the database:
-
-```bash
-docker compose exec app uv run python scripts/reset_db.py
-docker compose exec app uv run python scripts/seed_csv.py
-```
-
-If you do not want to reseed, create a user and URL manually and use that URL id in the test command.
-
-Pass criteria:
-
-- 2 app containers are running
-- 1 Nginx container is running in front of them
-- the k6 run completes with 200 concurrent users
-- `http_req_duration` satisfies `p(95)<3000`
-- `http_req_failed` satisfies `rate<0.05`
-
-For cache-heavy read verification, run:
-
-```bash
-docker run --rm \
-  --network curtain_default \
-  -e BASE_URL=http://nginx \
-  -e URL_ID=1 \
-  -v "$PWD/loadtests:/loadtests" \
-  grafana/k6 run /loadtests/highReadTest.js
-```
-
-`URL_ID=1` assumes a seeded database or another existing URL row with id `1`.
+For full load-testing procedures, pass criteria, and additional k6 scenarios, see [docs/LOAD_TESTING.md](./docs/LOAD_TESTING.md).
 
 CI runs the same pytest suite on every push and pull request via [.github/workflows/tests.yml](./.github/workflows/tests.yml).
 
-Detailed behavior docs:
+## Documentation
 
-- [docs/API_EXAMPLES.md](./docs/API_EXAMPLES.md)
-- [docs/ERROR_HANDELING.md](./docs/ERROR_HANDELING.md)
-- [docs/FAILURE_MODES.md](./docs/FAILURE_MODES.md)
-- [docs/INCIDENT_RESPONSE.md](./docs/INCIDENT_RESPONSE.md)
-- [docs/LOAD_TESTING.md](./docs/LOAD_TESTING.md)
-- [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md)
-- [docs/RUNBOOK.md](./docs/RUNBOOK.md)
-- [docs/SHERLOCK_MODE.md](./docs/SHERLOCK_MODE.md)
-- [REDIS_INFO.md](./REDIS_INFO.md)
+- API request/response examples: [docs/API_EXAMPLES.md](./docs/API_EXAMPLES.md)
+- Error-handling behavior: [docs/ERROR_HANDELING.md](./docs/ERROR_HANDELING.md)
+- Failure scenarios and mitigations: [docs/FAILURE_MODES.md](./docs/FAILURE_MODES.md)
+- Incident response setup and drills: [docs/INCIDENT_RESPONSE.md](./docs/INCIDENT_RESPONSE.md)
+- Root-cause diagnosis workflow: [docs/DIAGNOST_ERRORS.md](./docs/DIAGNOST_ERRORS.md)
+- Load testing and scaling verification: [docs/LOAD_TESTING.md](./docs/LOAD_TESTING.md)
+- Logs, metrics, and observability checks: [docs/OBSERVABILITY.md](./docs/OBSERVABILITY.md)
+- Operational runbook : [docs/RUNBOOK.md](./docs/RUNBOOK.md)
+- Redis behavior and caching notes: [docs/REDIS_INFO.md](./docs/REDIS_INFO.md)
 
-Current API highlights:
+## API highlights
 
 - `POST /users`, `GET /users`, `GET /users/<id>`, `PUT /users/<id>`
 - `POST /urls`, `GET /urls`, `GET /urls/<id>`, `PUT /urls/<id>`
