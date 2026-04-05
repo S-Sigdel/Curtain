@@ -56,7 +56,8 @@ def test_list_urls_rejects_invalid_user_id_query(client):
 
 
 def test_redirect_short_code_calls_record_click(integration_client):
-    # When Redis is healthy, record_click handles the write; no DB event row.
+    # Every redirect always writes a DB Event row (durable audit trail)
+    # and also fans out to Redis via record_click.
     url = Url.create(
         short_code="click1",
         original_url="https://example.com/tracked",
@@ -70,7 +71,7 @@ def test_redirect_short_code_calls_record_click(integration_client):
 
     mock_rc.assert_called_once()
     assert mock_rc.call_args[0][0] == "click1"
-    assert Event.select().where(Event.url_id == url.id).count() == 0
+    assert Event.select().where(Event.url_id == url.id).count() == 1
 
 
 def test_redirect_short_code_falls_back_to_db_when_redis_down(integration_client):

@@ -287,18 +287,17 @@ def redirect_short_code(short_code):
         )
         cache_status = "MISS"
 
-    # Fast path: Redis shard INCR + HyperLogLog + Stream append (1 RTT).
-    # Falls back to a direct PostgreSQL Event row when all shards are down so
-    # redirects are always counted, even in environments without Redis.
+    # Always persist a redirect Event to PostgreSQL (durable audit trail).
+    # Also fan out to Redis for real-time counters via the fast shard path.
     visitor_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or ""
-    if not record_click(short_code, visitor_ip, get_shard_ring()):
-        Event.create(
-            url_id=url_id,
-            user_id=None,
-            event_type="redirect",
-            timestamp=datetime.now(UTC).replace(tzinfo=None),
-            details=json.dumps({"short_code": short_code}),
-        )
+    Event.create(
+        url_id=url_id,
+        user_id=None,
+        event_type="redirect",
+        timestamp=datetime.now(UTC).replace(tzinfo=None),
+        details=json.dumps({"short_code": short_code}),
+    )
+    record_click(short_code, visitor_ip, get_shard_ring())
 
     response = redirect(original_url, code=302)
     response.headers["X-Cache"] = cache_status
