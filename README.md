@@ -21,7 +21,6 @@ flowchart TD
     SC[stream_consumer]
     P[Prometheus]
     G[Grafana]
-    PL[PromLens]
     NT[notifier]
     DR[discord_relay]
     D[Discord Webhook]
@@ -49,7 +48,6 @@ flowchart TD
 
     APPS_OUT -->|/metrics scrape targets| P
     P -->|queries + dashboards| G
-    P -->|query exploration| PL
     NT -->|poll /api/v1/alerts| P
     NT -->|alert batch| DR
     DR --> D
@@ -119,7 +117,6 @@ These are the main browser-accessible visual entrypoints in the stack:
 - Main app UI: `http://localhost:5000/`
 - Grafana dashboard: `http://localhost:3000`
 - Prometheus UI: `http://localhost:9090`
-- PromLens UI: `http://localhost:8081`
 - Discord relay health page: `http://localhost:8080/health`
 
 ## Current Architecture
