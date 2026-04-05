@@ -92,6 +92,26 @@ uv run python run.py
 - Scalability: [evidence/SCALABILITY_EVIDENCE.md](evidence/SCALABILITY_EVIDENCE.md)
 - Incident response: [evidence/INCIDENT_RESPONSE_EVIDENCE.md](evidence/INCIDENT_RESPONSE_EVIDENCE.md)
 
+## Testing
+
+Run the test suite locally:
+
+```bash
+uv sync --dev
+uv run pytest --cov=app --cov-report=term-missing
+```
+
+Run it inside Docker:
+
+```bash
+docker compose exec app uv sync --dev
+docker compose exec app uv run pytest -q
+```
+For test coverage report:
+```bash
+docker compose exec app uv run pytest --cov=app --cov-report=term-missing
+```
+
 ## Frontend URLs
 
 These are the main browser-accessible visual entrypoints in the stack:
@@ -206,21 +226,7 @@ Important runtime variables:
 - `GRAFANA_ADMIN_USER`
 - `GRAFANA_ADMIN_PASSWORD`
 
-## Testing
 
-Run the test suite locally:
-
-```bash
-uv sync --dev
-uv run pytest --cov=app --cov-report=term-missing
-```
-
-Run it inside Docker:
-
-```bash
-docker compose exec app uv sync --dev
-docker compose exec app uv run pytest -q
-```
 
 ## Project Structure
 
