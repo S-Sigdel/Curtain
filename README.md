@@ -58,13 +58,19 @@ If you want a step-by-step explanation of how data moves through the system, rea
 ## Build Instructions
 
 ### Prerequisites
-
+- git
 - Docker and Docker Compose
 - Optional for local non-Docker runs: `uv`, Python 3.13, PostgreSQL, and Redis
 
+### Clone Repo
+```bash
+git clone https://github.com/S-Sigdel/Curtain.git
+```
+
+
 ### Start the Full Stack
 
-```
+```bash
 uv sync
 docker compose up --build -d
 curl http://localhost:5000/health
