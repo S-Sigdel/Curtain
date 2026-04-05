@@ -4,6 +4,21 @@ from unittest.mock import MagicMock, patch
 from app.models import Event, Url
 
 
+class FakeCacheRedis:
+    def __init__(self):
+        self.values = {}
+
+    def get(self, key):
+        return self.values.get(key)
+
+    def setex(self, key, _ttl, value):
+        self.values[key] = value
+
+    def delete(self, *keys):
+        for key in keys:
+            self.values.pop(key, None)
+
+
 def test_create_url_requires_original_url(client):
     response = client.post("/urls", json={})
 
@@ -71,6 +86,55 @@ def test_redirect_calls_record_click_with_short_code(integration_client):
     mock_rc.assert_called_once()
     call_args = mock_rc.call_args[0]
     assert call_args[0] == "track1"  # short_code
+
+
+def test_redirect_short_code_uses_cache_on_subsequent_requests(integration_client, monkeypatch):
+    fake_cache = FakeCacheRedis()
+    monkeypatch.setattr("app.cache.get_cache_redis", lambda: fake_cache)
+
+    Url.create(
+        short_code="cache1",
+        original_url="https://example.com/cache",
+        is_active=True,
+        created_at=datetime(2026, 1, 1, 0, 0, 0),
+        updated_at=datetime(2026, 1, 1, 0, 0, 0),
+    )
+
+    with patch("app.routes.url_shortener.record_click"), \
+         patch("app.routes.url_shortener.Url.get_or_none", wraps=Url.get_or_none) as mock_get:
+        first = integration_client.get("/r/cache1")
+        second = integration_client.get("/r/cache1")
+
+    assert first.status_code == 302
+    assert second.status_code == 302
+    assert first.headers["X-Cache"] == "MISS"
+    assert second.headers["X-Cache"] == "HIT"
+    assert mock_get.call_count == 1
+
+
+def test_update_url_invalidates_redirect_cache(integration_client, monkeypatch):
+    fake_cache = FakeCacheRedis()
+    monkeypatch.setattr("app.cache.get_cache_redis", lambda: fake_cache)
+
+    url = Url.create(
+        short_code="cache2",
+        original_url="https://example.com/old",
+        is_active=True,
+        created_at=datetime(2026, 1, 1, 0, 0, 0),
+        updated_at=datetime(2026, 1, 1, 0, 0, 0),
+    )
+
+    with patch("app.routes.url_shortener.record_click"):
+        integration_client.get("/r/cache2")
+
+    integration_client.put(f"/urls/{url.id}", json={"is_active": False})
+
+    with patch("app.routes.url_shortener.record_click"), \
+         patch("app.routes.url_shortener.Url.get_or_none", wraps=Url.get_or_none) as mock_get:
+        response = integration_client.get("/r/cache2")
+
+    assert response.status_code == 404
+    assert mock_get.call_count == 1
 
 
 def test_analytics_response_includes_realtime_block(integration_client):

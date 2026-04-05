@@ -7,10 +7,15 @@ from app.redis_client import get_cache_redis
 URL_DETAIL_TTL_SECONDS = 300
 URL_LIST_TTL_SECONDS = 120
 URL_ANALYTICS_TTL_SECONDS = 120
+URL_REDIRECT_TTL_SECONDS = 300
 
 
 def url_detail_cache_key(url_id):
     return f"cache:url:{url_id}"
+
+
+def url_redirect_cache_key(short_code):
+    return f"cache:url:redirect:{short_code}"
 
 
 def url_list_cache_key(user_id=None, is_active=None):
@@ -60,9 +65,10 @@ def delete_cache_keys(*cache_keys):
         return
 
 
-def invalidate_url_cache(url_id, user_id=None):
+def invalidate_url_cache(url_id, user_id=None, short_code=None):
     delete_cache_keys(
         url_detail_cache_key(url_id),
+        url_redirect_cache_key(short_code),
         url_analytics_cache_key(url_id),
         url_list_cache_key(),
         url_list_cache_key(is_active=True),
