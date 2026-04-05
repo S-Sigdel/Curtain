@@ -55,6 +55,8 @@ flowchart TD
     DR --> D
 ```
 
+If you want a step-by-step explanation of how data moves through the system, read [docs/ARCHITECTURE_EXPLAINATION.md](docs/ARCHITECTURE_EXPLAINATION.md).
+
 ## Build Instructions
 
 ### Prerequisites
