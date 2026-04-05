@@ -31,6 +31,8 @@ Current alerts:
 
 - `CurtainServiceDown`
   Fires when Prometheus cannot scrape any app instance for 1 minute.
+- `CurtainInstanceDown`
+  Fires when fewer than 2 app instances are reachable for 1 minute (partial outage, load balancer degraded).
 - `CurtainHighErrorRate`
   Fires when 5xx responses exceed 5 percent of total requests for 2 minutes.
 

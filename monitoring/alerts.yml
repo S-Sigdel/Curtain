@@ -10,6 +10,15 @@ groups:
           summary: Curtain service is down
           description: Prometheus has not been able to scrape any Curtain app instance for at least 1 minute.
 
+      - alert: CurtainInstanceDown
+        expr: sum(up{job="curtain-app"}) < 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Curtain instance degraded
+          description: One or more Curtain app instances are unreachable. Load balancer is operating with reduced capacity.
+
       - alert: CurtainHighErrorRate
         expr: |
           (
