@@ -1,81 +1,61 @@
 # Incident Response
 
-This document describes the monitoring stack that supports an alert being sent to discord and an grafana dashboard.
+Curtain includes a local incident-response stack built around Prometheus, Grafana, an alert notifier, and a Discord relay.
 
 ## Stack
 
-The incident-response stack adds:
-
-- Prometheus for metric scraping and alert evaluation
-- a notifier service that polls Prometheus firing alerts every 15 seconds
-- a small Discord relay service that converts internal alert webhooks into Discord webhook posts
-- Grafana for the visual command-center dashboard
-
-Services are defined in [docker-compose.yml](/home/pacific/Programming/hackathons/Curtain/docker-compose.yml).
-
-## Endpoints
-
-- Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000`
-- Manual relay test: `http://localhost:8080/alert`
-- App metrics: `http://localhost:5000/metrics`
-- Public health check: `http://localhost:5000/health`
-
-## Alert Rules
-
-Alert rules live in:
-
-- [monitoring/alerts.yml](/home/pacific/Programming/hackathons/Curtain/monitoring/alerts.yml)
-
-Current alerts:
-
-- `CurtainServiceDown`
-  Fires when Prometheus cannot scrape any app instance for 1 minute.
-- `CurtainInstanceDown`
-  Fires when fewer than 2 app instances are reachable for 1 minute (partial outage, load balancer degraded).
-- `CurtainHighErrorRate`
-  Fires when 5xx responses exceed 5 percent of total requests for 2 minutes.
-
-The 15-second scrape, 15-second evaluation, and 15-second notifier polling keep both alerts within the 5-minute requirement.
-
-## Notification Path
-
-The notifier posts new firing alerts to the internal relay at `http://discord_relay:8080/alert`.
-The relay then forwards the alert message to the Discord webhook stored in `DISCORD_WEBHOOK_URL`.
-
-For local verification from the host, the relay is also exposed at `http://localhost:8080/alert`.
+- Prometheus scrapes `/metrics` from `app` and `app2`
+- Grafana displays the `Curtain Command Center` dashboard
+- `notifier` polls Prometheus alert state every 15 seconds
+- `discord_relay` receives internal alert payloads and forwards them to Discord
 
 Relevant files:
 
+- [docker-compose.yml](/home/pacific/Programming/hackathons/Curtain/docker-compose.yml)
+- [monitoring/prometheus.yml](/home/pacific/Programming/hackathons/Curtain/monitoring/prometheus.yml)
+- [monitoring/alerts.yml](/home/pacific/Programming/hackathons/Curtain/monitoring/alerts.yml)
 - [monitoring/prometheus_notifier.py](/home/pacific/Programming/hackathons/Curtain/monitoring/prometheus_notifier.py)
 - [monitoring/discord_webhook_relay.py](/home/pacific/Programming/hackathons/Curtain/monitoring/discord_webhook_relay.py)
-- [monitoring/grafana/dashboards/curtain-command-center.json](/home/pacific/Programming/hackathons/Curtain/monitoring/grafana/dashboards/curtain-command-center.json)
 - [docs/RUNBOOK.md](/home/pacific/Programming/hackathons/Curtain/docs/RUNBOOK.md)
-- [docs/SHERLOCK_MODE.md](/home/pacific/Programming/hackathons/Curtain/docs/SHERLOCK_MODE.md)
 
-## Fire Drill
+## Endpoints
 
-Start the full stack:
+- App health: `http://localhost:5000/health`
+- App metrics: `http://localhost:5000/metrics`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000`
+- Relay health: `http://localhost:8080/health`
+- Manual relay post target: `http://localhost:8080/alert`
 
-```bash
-docker compose up --build -d
-```
+## Current Alert Rules
 
-### Service Down
+- `CurtainServiceDown`: fewer than 1 healthy app targets for 1 minute
+- `CurtainInstanceDown`: fewer than 2 healthy app targets for 1 minute
+- `CurtainHighErrorRate`: 5xx rate above 5 percent for 2 minutes
+- `CurtainRedisShardFailures`: more than 5 shard failures in 1 minute
 
-Stop both app instances:
+## Notification Flow
+
+1. Prometheus evaluates alert rules.
+2. `notifier` fetches `/api/v1/alerts`.
+3. New firing alerts are posted to `http://discord_relay:8080/alert`.
+4. `discord_relay` forwards the alert batch to the configured Discord webhook.
+
+## Fire Drills
+
+### Full Service Down
 
 ```bash
 docker compose stop app app2
 ```
 
-Expected outcome:
+Expected result:
 
-- Prometheus loses all `curtain-app` scrape targets
-- `CurtainServiceDown` enters firing state after 1 minute
-- Discord receives a notification shortly after
+- `CurtainServiceDown` fires
+- Grafana traffic collapses
+- Discord receives an alert after Prometheus and notifier polling windows elapse
 
-Bring the service back:
+Recover:
 
 ```bash
 docker compose start app app2
@@ -83,16 +63,13 @@ docker compose start app app2
 
 ### High Error Rate
 
-The app exposes a gated drill endpoint at `GET /debug/fail`.
-It only returns a `500` when `ENABLE_INCIDENT_DEBUG_ROUTES=true`.
-
-If you change that flag in `.env`, recreate the app containers before running the drill:
+Enable the drill route by setting `ENABLE_INCIDENT_DEBUG_ROUTES=true` in `.env`, then recreate the app tier:
 
 ```bash
 docker compose up -d --force-recreate app app2 nginx
 ```
 
-Generate sustained failures:
+Then drive sustained failures:
 
 ```bash
 docker run --rm \
@@ -102,20 +79,21 @@ docker run --rm \
   grafana/k6 run /loadtests/errorRateTest.js
 ```
 
-Expected outcome:
+### Redis Shard Failure Demo
 
-- the app emits `500` responses for at least 2 minutes
-- `CurtainHighErrorRate` enters firing state
-- Discord receives a notification
-
-## Verification Commands
+Drive redirect traffic, then interrupt a shard:
 
 ```bash
-docker compose ps
-docker compose logs -f prometheus
-docker compose logs -f notifier
-docker compose logs -f discord_relay
-curl -s http://localhost:9090/api/v1/rules
-curl -s http://localhost:9090/api/v1/alerts
-curl -i http://localhost:8080/health
+docker compose stop redis_shard0
+docker run --rm \
+  --network curtain_default \
+  -e BASE_URL=http://nginx \
+  -v "$PWD/loadtests:/loadtests" \
+  grafana/k6 run /loadtests/shardFailoverDemo.js
 ```
+
+Expected result:
+
+- redirect traffic may continue through failover
+- `redis_shard_failures_total` and `redis_shard_failovers_total` increase
+- `CurtainRedisShardFailures` can fire if failures cross the rule threshold

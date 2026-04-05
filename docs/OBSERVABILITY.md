@@ -1,15 +1,24 @@
 # Observability
 
-Curtain exposes structured request logs and a Prometheus-compatible metrics page for local debugging and container-based deployments.
+Curtain exposes structured logs and Prometheus metrics from each Flask app instance.
 
-## JSON Logs
+## What Exists Today
 
-Application request logs and Gunicorn access/error logs are emitted as JSON lines with:
+- JSON application logs from Flask request handling
+- JSON Gunicorn access and error logs
+- `/metrics` on each app container
+- Prometheus scraping `app:5000` and `app2:5000`
+- Grafana dashboard at `http://localhost:3000`
+
+## Logs
+
+App and Gunicorn logs are emitted as JSON lines. Common fields include:
 
 - `timestamp`
 - `level`
 - `logger`
 - `message`
+- `instance`
 - `component`
 - `method`
 - `path`
@@ -18,57 +27,43 @@ Application request logs and Gunicorn access/error logs are emitted as JSON line
 - `remote_addr`
 - `endpoint`
 
-View logs without SSH:
+View logs:
 
 ```bash
-docker compose logs -f app
-docker compose logs -f app2
-docker compose logs -f nginx
+docker compose logs -f app app2 nginx
+docker compose logs -f stream_consumer notifier discord_relay
 ```
-
-Example log line:
-
-```json
-{"timestamp":"2026-04-04T15:00:00+00:00","level":"INFO","logger":"app","message":"request.complete","component":"http","method":"GET","path":"/urls/1","status_code":200,"duration_ms":12.48,"remote_addr":"172.20.0.1","endpoint":"url_shortener.get_url"}
-```
-
-Gunicorn access/error logs use the same JSON format and add fields such as:
-
-- `client_addr`
-- `query`
-- `response_bytes`
-- `user_agent`
 
 ## Metrics
 
-The app exposes Prometheus text-format metrics at:
+Fetch metrics through Nginx:
 
 ```bash
 curl http://localhost:5000/metrics
 ```
 
-Key metrics include:
+Important metrics:
 
 - `http_requests_total`
 - `http_request_duration_seconds`
 - `process_cpu_seconds_total`
 - `process_resident_memory_bytes`
+- `redis_shard_failures_total`
+- `redis_shard_failovers_total`
 
-Those process metrics cover CPU and memory usage directly from the running app process.
+The shard metrics are emitted by the Flask app when redirect click writes fail over from one Redis shard to another.
 
-## Verification
-
-Quick checks:
+## Quick Verification
 
 ```bash
 curl -i http://localhost:5000/health
 curl -i http://localhost:5000/metrics
 curl -i http://localhost:5000/urls
-docker compose logs --tail=20 app
+docker compose logs --tail=50 app
 ```
 
-Expected result:
+Expected results:
 
-- `/metrics` returns `200 OK`
-- the response body contains request and process metrics
-- app logs show JSON entries instead of plain `print()` output
+- `/health` returns `200`
+- `/metrics` returns Prometheus text format
+- logs show JSON objects rather than plain text lines
