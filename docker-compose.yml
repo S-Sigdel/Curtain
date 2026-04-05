@@ -11,10 +11,6 @@ x-app-base: &app-base
       condition: service_started
     redis_cache:
       condition: service_started
-    redis_shard0:
-      condition: service_healthy
-    redis_shard1:
-      condition: service_healthy
   environment:
     FLASK_DEBUG: "false"
     FLASK_RUN_HOST: 0.0.0.0

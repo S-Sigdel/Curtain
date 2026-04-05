@@ -252,7 +252,9 @@ def test_get_click_stats_returns_zeros_on_redis_error():
 
     stats = get_click_stats("sc0001", ring)
 
-    assert stats == {"total_clicks": 0, "unique_visitors": 0, "hourly": {}}
+    assert stats["total_clicks"] == 0
+    assert stats["unique_visitors"] == 0
+    assert all(v == 0 for v in stats["hourly"].values())
 
 
 def test_get_click_stats_returns_zeros_when_all_shards_down():

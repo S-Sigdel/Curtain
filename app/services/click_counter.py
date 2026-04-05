@@ -139,27 +139,36 @@ def get_click_stats(short_code: str, ring) -> dict:
     Returns all zeros on any Redis failure so the analytics endpoint can
     fall back gracefully to PostgreSQL event counts.
     """
-    empty = {"total_clicks": 0, "unique_visitors": 0, "hourly": {}}
+    now = datetime.now(UTC)
+    bucket_labels = [
+        (now - timedelta(hours=i)).strftime("%Y-%m-%d:%H") for i in range(72)
+    ]
+    totals: dict = {
+        "total_clicks": 0,
+        "unique_visitors": 0,
+        "hourly": {label: 0 for label in bucket_labels},
+    }
+
     try:
-        now = datetime.now(UTC)
-        bucket_labels = [
-            (now - timedelta(hours=i)).strftime("%Y-%m-%d:%H") for i in range(72)
-        ]
-        totals = empty.copy()
-        totals["hourly"] = {label: 0 for label in bucket_labels}
-
-        for _shard_id, client in ring.all_clients():
-            shard_stats = _fetch_stats_from_client(client, short_code, bucket_labels)
-            totals["total_clicks"] += shard_stats["total_clicks"]
-            totals["unique_visitors"] += shard_stats["unique_visitors"]
-            for label, count in shard_stats["hourly"].items():
-                totals["hourly"][label] += count
-
-        return totals
-
+        shard_clients = ring.all_clients()
     except Exception as exc:
         logger.warning(
             "click_counter.get_stats_failed",
             extra={"short_code": short_code, "error": str(exc)},
         )
-        return empty
+        return totals
+
+    for shard_id, client in shard_clients:
+        try:
+            shard_stats = _fetch_stats_from_client(client, short_code, bucket_labels)
+            totals["total_clicks"] += shard_stats["total_clicks"]
+            totals["unique_visitors"] += shard_stats["unique_visitors"]
+            for label, count in shard_stats["hourly"].items():
+                totals["hourly"][label] = totals["hourly"].get(label, 0) + count
+        except Exception as exc:
+            logger.warning(
+                "click_counter.get_stats_shard_failed",
+                extra={"short_code": short_code, "shard": shard_id, "error": str(exc)},
+            )
+
+    return totals
