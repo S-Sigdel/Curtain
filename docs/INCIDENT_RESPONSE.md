@@ -54,7 +54,7 @@ Current alerts:
 - `CurtainHighErrorRate`
   Fires when 5xx responses exceed 5 percent of total requests for 2 minutes.
 
-The 15-second scrape, 15-second evaluation, and 15-second notifier polling keep both alerts within the 5-minute requirement.
+Prometheus is currently configured with a `500ms` scrape interval and `500ms` evaluation interval, while the notifier polls every `15s`. That keeps the alerting path comfortably within the quest's 5-minute requirement while also making Prometheus and PromLens much more responsive during demos.
 
 ## Notification Path
 

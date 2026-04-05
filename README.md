@@ -8,8 +8,11 @@ Curtain is a Flask service for URL shortening, redirect tracking, analytics, and
 flowchart TD
     U[User / Client]
     N[Nginx<br/>Load Balancer]
-    A1[app<br/>Flask + Gunicorn]
-    A2[app2<br/>Flask + Gunicorn]
+    subgraph APPS[Application Tier]
+        A1[app<br/>Flask + Gunicorn]
+        A2[app2<br/>Flask + Gunicorn]
+    end
+    APPS_OUT[app / app2<br/>shared app behavior]
     PG[(PostgreSQL)]
     RC[(redis<br/>URL Counter)]
     CACHE[(redis_cache<br/>URL + Analytics Cache)]
@@ -18,6 +21,7 @@ flowchart TD
     SC[stream_consumer]
     P[Prometheus]
     G[Grafana]
+    PL[PromLens]
     NT[notifier]
     DR[discord_relay]
     D[Discord Webhook]
@@ -25,34 +29,33 @@ flowchart TD
     U -->|HTTP| N
     N --> A1
     N --> A2
+    A1 -.-> APPS_OUT
+    A2 -.-> APPS_OUT
 
-    A1 -->|DB reads/writes| PG
-    A2 -->|DB reads/writes| PG
+    APPS_OUT -->|DB reads/writes| PG
 
-    A1 -->|short-code counter| RC
-    A2 -->|short-code counter| RC
+    APPS_OUT -->|short-code counter| RC
 
-    A1 -->|cache lookup / populate| CACHE
-    A2 -->|cache lookup / populate| CACHE
+    APPS_OUT -->|cache lookup / populate| CACHE
 
     CACHE -.->|cache miss -> DB| PG
 
-    A1 -->|redirect click writes| S0
-    A1 -->|redirect click writes| S1
-    A2 -->|redirect click writes| S0
-    A2 -->|redirect click writes| S1
+    APPS_OUT -->|redirect click writes| S0
+    APPS_OUT -->|redirect click writes| S1
 
     S0 -->|Redis Streams| SC
     S1 -->|Redis Streams| SC
     SC -->|batched redirect events| PG
 
-    A1 -->|/metrics| P
-    A2 -->|/metrics| P
-    P --> G
-    P -->|alert polling| NT
+    APPS_OUT -->|/metrics scrape targets| P
+    P -->|queries + dashboards| G
+    P -->|query exploration| PL
+    NT -->|poll /api/v1/alerts| P
     NT -->|alert batch| DR
     DR --> D
 ```
+
+If you want a step-by-step explanation of how data moves through the system, read [docs/ARCHITECTURE_EXPLAINATION.md](docs/ARCHITECTURE_EXPLAINATION.md).
 
 ## Build Instructions
 
@@ -63,7 +66,8 @@ flowchart TD
 
 ### Start the Full Stack
 
-```bash
+```
+uv sync
 docker compose up --build -d
 curl http://localhost:5000/health
 ```
@@ -87,6 +91,16 @@ uv run python run.py
 - Reliability: [evidence/RELIABILITY_EVIDENCE.md](evidence/RELIABILITY_EVIDENCE.md)
 - Scalability: [evidence/SCALABILITY_EVIDENCE.md](evidence/SCALABILITY_EVIDENCE.md)
 - Incident response: [evidence/INCIDENT_RESPONSE_EVIDENCE.md](evidence/INCIDENT_RESPONSE_EVIDENCE.md)
+
+## Frontend URLs
+
+These are the main browser-accessible visual entrypoints in the stack:
+
+- Main app UI: `http://localhost:5000/`
+- Grafana dashboard: `http://localhost:3000`
+- Prometheus UI: `http://localhost:9090`
+- PromLens UI: `http://localhost:8081`
+- Discord relay health page: `http://localhost:8080/health`
 
 ## Current Architecture
 

@@ -13,6 +13,7 @@ Below is a screenshot of the metrics page exposed by the application.
 ![Metrics Page](../docs/images/incident_response/Bronze_incident_metrics.png)
 
 These demonstrate that the app emits structured JSON logs with timestamps and levels, and exposes a metrics endpoint that Prometheus can scrape for service and process signals.
+The `/metrics` page includes process-level CPU and memory metrics such as `process_cpu_seconds_total` and `process_resident_memory_bytes`.
 
 Relevant docs:
 
@@ -25,10 +26,14 @@ Silver is about alerting: defining failure rules, wiring notifications, and prov
 
 We will show the live alert demo in the project submission video, where a simulated failure results in a Discord notification.
 
+While we will show that in the Live Demo, below is the screenshot of the discord notification coming to over server.
+![Discord Notification](../docs/images/incident_response/Silver_discord.png)
+
 Below is a screenshot of the alert logic configuration located in [../monitoring/alerts.yml](../monitoring/alerts.yml).
 ![Alert Config](../docs/images/incident_response/Silver_Incident_alert_logic.png)
 
 This evidence supports the current alert setup for service-down and high-error-rate scenarios, along with the notification path that forwards alerts to Discord.
+Prometheus currently scrapes every `500ms` and evaluates every `500ms`, while the notifier polls every `15s`, so the alerting path operates comfortably within the quest’s 5-minute requirement.
 
 Relevant docs:
 
@@ -43,6 +48,7 @@ Below is a screenshot of the Grafana dashboard while the system is under load.
 ![Grafana Dashboard](../docs/images/incident_response/Gold_incident_dashboard_grafana.png)
 
 This dashboard is used to track the key operational signals needed for debugging, including request latency, traffic volume, error behavior, and process-level saturation indicators.
+The Grafana dashboard configuration includes panels for `p95 Latency`, `Total Traffic`, `Error Rate`, `System Saturation — CPU & Memory per Instance`, `Healthy Instances`, `Live Traffic per Instance`, `Traffic by Endpoint Type`, `Latency Percentiles (p50/p95/p99)`, and `Redis Shard Failures and Failovers` which gives us the required dashboard coverage for latency, traffic, errors, and saturation.
 
 Runbook:
 
