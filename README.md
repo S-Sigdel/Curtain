@@ -8,8 +8,11 @@ Curtain is a Flask service for URL shortening, redirect tracking, analytics, and
 flowchart TD
     U[User / Client]
     N[Nginx<br/>Load Balancer]
-    A1[app<br/>Flask + Gunicorn]
-    A2[app2<br/>Flask + Gunicorn]
+    subgraph APPS[Application Tier]
+        A1[app<br/>Flask + Gunicorn]
+        A2[app2<br/>Flask + Gunicorn]
+    end
+    APPS_OUT[app / app2<br/>shared app behavior]
     PG[(PostgreSQL)]
     RC[(redis<br/>URL Counter)]
     CACHE[(redis_cache<br/>URL + Analytics Cache)]
@@ -26,29 +29,25 @@ flowchart TD
     U -->|HTTP| N
     N --> A1
     N --> A2
+    A1 -.-> APPS_OUT
+    A2 -.-> APPS_OUT
 
-    A1 -->|DB reads/writes| PG
-    A2 -->|DB reads/writes| PG
+    APPS_OUT -->|DB reads/writes| PG
 
-    A1 -->|short-code counter| RC
-    A2 -->|short-code counter| RC
+    APPS_OUT -->|short-code counter| RC
 
-    A1 -->|cache lookup / populate| CACHE
-    A2 -->|cache lookup / populate| CACHE
+    APPS_OUT -->|cache lookup / populate| CACHE
 
     CACHE -.->|cache miss -> DB| PG
 
-    A1 -->|redirect click writes| S0
-    A1 -->|redirect click writes| S1
-    A2 -->|redirect click writes| S0
-    A2 -->|redirect click writes| S1
+    APPS_OUT -->|redirect click writes| S0
+    APPS_OUT -->|redirect click writes| S1
 
     S0 -->|Redis Streams| SC
     S1 -->|Redis Streams| SC
     SC -->|batched redirect events| PG
 
-    A1 -->|/metrics scrape target| P
-    A2 -->|/metrics scrape target| P
+    APPS_OUT -->|/metrics scrape targets| P
     P -->|queries + dashboards| G
     P -->|query exploration| PL
     NT -->|poll /api/v1/alerts| P
