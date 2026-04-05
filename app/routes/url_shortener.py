@@ -115,9 +115,13 @@ def shorten_ui():
         return f'<div id="message" class="error">{error_message}</div>', status_code
 
     short_url = f"{request.host_url.rstrip('/')}/r/{mapping.short_code}"
+    payload_url = f"{request.host_url.rstrip('/')}/urls/{mapping.id}"
     return (
-        f'<div id="message" class="success">Short URL ready! '
-        f'<a href="{short_url}" target="_blank">{short_url}</a></div>',
+        f'<div id="message" class="success">'
+        f'Short URL ready!<br><br>'
+        f'<strong>Redirect:</strong> <a href="{short_url}" target="_blank">{short_url}</a><br>'
+        f'<strong>Payload:</strong> <a href="{payload_url}" target="_blank">{payload_url}</a>'
+        f'</div>',
         status_code,
     )
 
