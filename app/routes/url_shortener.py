@@ -268,6 +268,4 @@ def redirect_short_code(short_code):
     visitor_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or ""
     record_click(short_code, visitor_ip, get_shard_ring())
 
-    # TODO(phase-4): remove once stream consumer handles PG event writes.
-    _record_event(url, "redirect", details={"short_code": short_code})
     return redirect(url.original_url, code=302)

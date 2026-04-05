@@ -15,7 +15,7 @@ itself never fails because of the counter.
 
 import logging
 import time
-from datetime import datetime, UTC, timedelta
+from datetime import UTC, datetime, timedelta
 
 from redis import RedisError
 
@@ -50,6 +50,22 @@ def _current_hour_bucket() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%d:%H")
 
 
+def _execute_click_pipeline(client, short_code: str, visitor_ip: str) -> None:
+    bucket = _current_hour_bucket()
+    hourly = _hourly_key(short_code, bucket)
+
+    pipe = client.pipeline(transaction=False)
+    pipe.incr(_total_key(short_code))
+    pipe.incr(hourly)
+    pipe.expire(hourly, HOURLY_TTL)
+    pipe.pfadd(_uv_key(short_code), visitor_ip)
+    pipe.xadd(
+        _stream_key(short_code),
+        {"sc": short_code, "ip": visitor_ip, "ts": str(time.time())},
+    )
+    pipe.execute()
+
+
 def record_click(short_code: str, visitor_ip: str, ring) -> None:
     """
     Record one click against ``short_code`` on the appropriate Redis shard.
@@ -62,26 +78,53 @@ def record_click(short_code: str, visitor_ip: str, ring) -> None:
     Failures are logged at WARNING level and do NOT propagate — the caller
     (the redirect route) must never return a 5xx because the counter failed.
     """
-    try:
-        _shard_id, client = ring.get_shard(short_code)
-        bucket = _current_hour_bucket()
-        hourly = _hourly_key(short_code, bucket)
+    primary_shard_id = None
 
-        pipe = client.pipeline(transaction=False)
-        pipe.incr(_total_key(short_code))
-        pipe.incr(hourly)
-        pipe.expire(hourly, HOURLY_TTL)
-        pipe.pfadd(_uv_key(short_code), visitor_ip)
-        pipe.xadd(
-            _stream_key(short_code),
-            {"sc": short_code, "ip": visitor_ip, "ts": str(time.time())},
-        )
-        pipe.execute()
+    try:
+        primary_shard_id, client = ring.get_shard(short_code)
+        _execute_click_pipeline(client, short_code, visitor_ip)
+        return
     except Exception as exc:  # RedisError, AllShardsDownError, etc.
-        logger.warning(
-            "click_counter.record_failed",
-            extra={"short_code": short_code, "error": str(exc)},
-        )
+        if primary_shard_id is not None and hasattr(ring, "record_failure"):
+            ring.record_failure(primary_shard_id)
+        primary_error = exc
+
+    try:
+        for shard_id, client in ring.get_failover_shards(short_code):
+            if shard_id == primary_shard_id:
+                continue
+            try:
+                _execute_click_pipeline(client, short_code, visitor_ip)
+                if primary_shard_id is not None and hasattr(ring, "record_failover"):
+                    ring.record_failover(primary_shard_id, shard_id)
+                return
+            except Exception:
+                if hasattr(ring, "record_failure"):
+                    ring.record_failure(shard_id)
+    except Exception:
+        pass
+
+    logger.warning(
+        "click_counter.record_failed",
+        extra={"short_code": short_code, "error": str(primary_error)},
+    )
+
+
+def _fetch_stats_from_client(client, short_code: str, bucket_labels: list[str]) -> dict:
+    pipe = client.pipeline(transaction=False)
+    pipe.get(_total_key(short_code))
+    pipe.pfcount(_uv_key(short_code))
+    for label in bucket_labels:
+        pipe.get(_hourly_key(short_code, label))
+
+    results = pipe.execute()
+    return {
+        "total_clicks": int(results[0] or 0),
+        "unique_visitors": int(results[1] or 0),
+        "hourly": {
+            bucket_labels[i]: int(results[i + 2] or 0) for i in range(72)
+        },
+    }
 
 
 def get_click_stats(short_code: str, ring) -> dict:
@@ -98,27 +141,21 @@ def get_click_stats(short_code: str, ring) -> dict:
     """
     empty = {"total_clicks": 0, "unique_visitors": 0, "hourly": {}}
     try:
-        _shard_id, client = ring.get_shard(short_code)
-
         now = datetime.now(UTC)
         bucket_labels = [
             (now - timedelta(hours=i)).strftime("%Y-%m-%d:%H") for i in range(72)
         ]
+        totals = empty.copy()
+        totals["hourly"] = {label: 0 for label in bucket_labels}
 
-        pipe = client.pipeline(transaction=False)
-        pipe.get(_total_key(short_code))
-        pipe.pfcount(_uv_key(short_code))
-        for label in bucket_labels:
-            pipe.get(_hourly_key(short_code, label))
+        for _shard_id, client in ring.all_clients():
+            shard_stats = _fetch_stats_from_client(client, short_code, bucket_labels)
+            totals["total_clicks"] += shard_stats["total_clicks"]
+            totals["unique_visitors"] += shard_stats["unique_visitors"]
+            for label, count in shard_stats["hourly"].items():
+                totals["hourly"][label] += count
 
-        results = pipe.execute()
-
-        total = int(results[0] or 0)
-        unique = int(results[1] or 0)
-        hourly = {
-            bucket_labels[i]: int(results[i + 2] or 0) for i in range(72)
-        }
-        return {"total_clicks": total, "unique_visitors": unique, "hourly": hourly}
+        return totals
 
     except Exception as exc:
         logger.warning(

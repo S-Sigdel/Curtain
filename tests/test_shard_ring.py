@@ -4,7 +4,7 @@ import hashlib
 from unittest.mock import MagicMock, patch
 
 import pytest
-from redis import ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
+from redis import ConnectionError as RedisConnectionError
 
 from app.shard_ring import AllShardsDownError, ResilientShardRing, ShardRing, _md5_int
 
@@ -110,7 +110,7 @@ def test_resilient_ring_returns_healthy_shard():
     assert shard_id == "ok"
 
 
-def test_resilient_ring_skips_dead_shard_and_uses_healthy_one():
+def test_resilient_ring_returns_primary_shard_without_probing():
     dead = _make_client("dead", healthy=False)
     alive = _make_client("alive", healthy=True)
     ring = ResilientShardRing([
@@ -118,43 +118,56 @@ def test_resilient_ring_skips_dead_shard_and_uses_healthy_one():
         {"id": "alive", "client": alive},
     ])
 
-    # Force a key that lands on "dead" first by patching bisect_left result.
-    # We do this by making every position on the ring resolve to "dead" first,
-    # which is simpler to assert via all_clients order — instead just verify
-    # the returned shard is "alive" regardless of which shard the hash picks.
-    for key in [str(i) for i in range(50)]:
-        shard_id, _ = ring.get_shard(key)
-        assert shard_id in {"dead", "alive"}
-
-    # Explicitly verify: if primary is dead, alive must be returned
-    # Patch ping to be dead only on the "dead" client — already set above.
-    # Try many keys; at least some should land on "dead" first and fall over.
-    results = set()
     for i in range(200):
         shard_id, _ = ring.get_shard(str(i))
-        results.add(shard_id)
-    # alive must appear (failover worked) and never raises
-    assert "alive" in results
+        if shard_id == "dead":
+            break
+    else:
+        pytest.fail("expected at least one key to map to the dead shard")
+
+    dead.ping.assert_not_called()
+    alive.ping.assert_not_called()
 
 
-def test_resilient_ring_raises_when_all_shards_down():
-    ring = ResilientShardRing(_make_shards("s0", "s1", healthy=False))
-    with pytest.raises(AllShardsDownError):
-        ring.get_shard("key")
+def test_resilient_ring_returns_ordered_failover_candidates():
+    ring = ResilientShardRing(_make_shards("s0", "s1", "s2"))
+
+    candidates = ring.get_failover_shards("key")
+
+    assert len(candidates) == 3
+    assert len({shard_id for shard_id, _ in candidates}) == 3
 
 
-def test_resilient_ring_timeout_is_treated_as_failure():
-    client = _make_client("flaky")
-    client.ping.side_effect = RedisTimeoutError("timeout")
-    ring = ResilientShardRing([{"id": "flaky", "client": client}])
-    with pytest.raises(AllShardsDownError):
-        ring.get_shard("key")
-
-
-def test_resilient_ring_empty_raises():
+def test_resilient_ring_raises_when_no_shards_exist():
     ring = ResilientShardRing([])
     with pytest.raises(AllShardsDownError):
-        ring.get_shard("key")
+        ring.get_failover_shards("key")
+
+
+def test_resilient_ring_records_failure_metric_on_dead_primary():
+    ring = ResilientShardRing(_make_shards("dead", "alive"))
+    mock_counter = MagicMock()
+    mock_app = MagicMock(shard_failures=mock_counter)
+
+    with patch("app.shard_ring.has_app_context", return_value=True), \
+         patch("app.shard_ring.current_app", mock_app), \
+         patch("app.shard_ring.INSTANCE_ID", "test-instance"):
+        ring.record_failure("dead")
+
+    mock_counter.labels.assert_called_with("dead", "test-instance")
+
+
+def test_resilient_ring_records_failover_metric_when_rerouting():
+    ring = ResilientShardRing(_make_shards("dead", "alive"))
+    mock_counter = MagicMock()
+    mock_app = MagicMock(shard_failovers=mock_counter)
+
+    with patch("app.shard_ring.has_app_context", return_value=True), \
+         patch("app.shard_ring.current_app", mock_app), \
+         patch("app.shard_ring.INSTANCE_ID", "test-instance"):
+        ring.record_failover("dead", "alive")
+
+    mock_counter.labels.assert_called_with("dead", "alive", "test-instance")
 
 
 # ---------------------------------------------------------------------------

@@ -56,6 +56,8 @@ def _make_ring(client):
     """Return a mock ring that always gives (shard_id, client)."""
     ring = MagicMock()
     ring.get_shard.return_value = ("shard0", client)
+    ring.get_failover_shards.return_value = [("shard0", client)]
+    ring.all_clients.return_value = [("shard0", client)]
     return ring
 
 
@@ -146,6 +148,7 @@ def test_record_click_adds_short_code_to_stream():
 def test_record_click_does_not_raise_on_redis_error():
     ring = MagicMock()
     ring.get_shard.side_effect = RedisConnectionError("down")
+    ring.get_failover_shards.side_effect = AllShardsDownError("no shards")
     # Must not raise — redirect should still succeed
     record_click("sc0001", "1.2.3.4", ring)
 
@@ -153,6 +156,7 @@ def test_record_click_does_not_raise_on_redis_error():
 def test_record_click_does_not_raise_when_all_shards_down():
     ring = MagicMock()
     ring.get_shard.side_effect = AllShardsDownError("no shards")
+    ring.get_failover_shards.side_effect = AllShardsDownError("no shards")
     record_click("sc0001", "1.2.3.4", ring)
 
 
@@ -164,6 +168,30 @@ def test_record_click_does_not_raise_on_pipeline_execute_failure():
     ring = _make_ring(client)
 
     record_click("sc0001", "1.2.3.4", ring)  # must not raise
+
+
+def test_record_click_fails_over_to_next_shard_on_primary_write_error():
+    primary_pipe = _make_pipeline()
+    primary_pipe.execute.side_effect = RedisConnectionError("primary down")
+    primary_client = MagicMock()
+    primary_client.pipeline.return_value = primary_pipe
+
+    failover_pipe = _make_pipeline()
+    failover_client = MagicMock()
+    failover_client.pipeline.return_value = failover_pipe
+
+    ring = MagicMock()
+    ring.get_shard.return_value = ("shard0", primary_client)
+    ring.get_failover_shards.return_value = [
+        ("shard0", primary_client),
+        ("shard1", failover_client),
+    ]
+
+    record_click("sc0001", "1.2.3.4", ring)
+
+    ring.record_failure.assert_called_with("shard0")
+    ring.record_failover.assert_called_with("shard0", "shard1")
+    failover_pipe.execute.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +248,7 @@ def test_get_click_stats_handles_none_redis_values():
 
 def test_get_click_stats_returns_zeros_on_redis_error():
     ring = MagicMock()
-    ring.get_shard.side_effect = RedisConnectionError("down")
+    ring.all_clients.side_effect = RedisConnectionError("down")
 
     stats = get_click_stats("sc0001", ring)
 
@@ -229,9 +257,30 @@ def test_get_click_stats_returns_zeros_on_redis_error():
 
 def test_get_click_stats_returns_zeros_when_all_shards_down():
     ring = MagicMock()
-    ring.get_shard.side_effect = AllShardsDownError("no shards")
+    ring.all_clients.side_effect = AllShardsDownError("no shards")
 
     stats = get_click_stats("sc0001", ring)
 
     assert stats["total_clicks"] == 0
     assert stats["unique_visitors"] == 0
+
+
+def test_get_click_stats_sums_results_across_shards():
+    first_pipe = MagicMock()
+    first_pipe.execute.return_value = [5, 2] + [1] * 72
+    first_client = MagicMock()
+    first_client.pipeline.return_value = first_pipe
+
+    second_pipe = MagicMock()
+    second_pipe.execute.return_value = [7, 3] + [2] * 72
+    second_client = MagicMock()
+    second_client.pipeline.return_value = second_pipe
+
+    ring = MagicMock()
+    ring.all_clients.return_value = [("shard0", first_client), ("shard1", second_client)]
+
+    stats = get_click_stats("abc123", ring)
+
+    assert stats["total_clicks"] == 12
+    assert stats["unique_visitors"] == 5
+    assert all(v == 3 for v in stats["hourly"].values())

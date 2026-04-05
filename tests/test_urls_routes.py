@@ -40,7 +40,7 @@ def test_list_urls_rejects_invalid_user_id_query(client):
     }
 
 
-def test_redirect_short_code_records_redirect_event(integration_client):
+def test_redirect_short_code_does_not_write_redirect_event_directly(integration_client):
     url = Url.create(
         short_code="click1",
         original_url="https://example.com/tracked",
@@ -52,8 +52,7 @@ def test_redirect_short_code_records_redirect_event(integration_client):
     integration_client.get("/r/click1")
 
     events = list(Event.select().where(Event.url_id == url.id))
-    assert len(events) == 1
-    assert events[0].event_type == "redirect"
+    assert events == []
 
 
 def test_redirect_calls_record_click_with_short_code(integration_client):

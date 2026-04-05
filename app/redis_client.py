@@ -5,17 +5,37 @@ from redis import Redis
 
 from app.shard_ring import ResilientShardRing
 
+REDIS_SOCKET_TIMEOUT_SECONDS = float(os.environ.get("REDIS_SOCKET_TIMEOUT_SECONDS", "0.05"))
+REDIS_CONNECT_TIMEOUT_SECONDS = float(os.environ.get("REDIS_CONNECT_TIMEOUT_SECONDS", "0.05"))
+
+
+def _redis_client_from_url(url: str) -> Redis:
+    return Redis.from_url(
+        url,
+        socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+        socket_connect_timeout=REDIS_CONNECT_TIMEOUT_SECONDS,
+    )
+
+
+def _redis_client(host: str, port: int) -> Redis:
+    return Redis(
+        host=host,
+        port=port,
+        socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+        socket_connect_timeout=REDIS_CONNECT_TIMEOUT_SECONDS,
+    )
+
 
 @lru_cache(maxsize=1)
 def get_counter_redis():
     # Reuse a single client per process so routes do not reconnect on every request.
-    return Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
+    return _redis_client_from_url(os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
 
 
 @lru_cache(maxsize=1)
 def get_cache_redis():
     # Keep the cache client separate from the counter client for operational isolation.
-    return Redis.from_url(os.environ.get("CACHE_REDIS_URL", "redis://localhost:6380/0"))
+    return _redis_client_from_url(os.environ.get("CACHE_REDIS_URL", "redis://localhost:6380/0"))
 
 
 @lru_cache(maxsize=1)
@@ -41,7 +61,10 @@ def get_shard_ring() -> ResilientShardRing:
         addrs = [parts]
 
     shards = [
-        {"id": f"shard{i}", "client": Redis(host=addr.split(":")[0], port=int(addr.split(":")[1]))}
+        {
+            "id": f"shard{i}",
+            "client": _redis_client(addr.split(":")[0], int(addr.split(":")[1])),
+        }
         for i, addr in enumerate(addrs)
     ]
     return ResilientShardRing(shards)

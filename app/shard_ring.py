@@ -2,21 +2,25 @@
 Consistent hash ring over Redis shard instances.
 
 Each short code is deterministically mapped to a shard via MD5 hashing with
-virtual nodes to smooth load distribution. ResilientShardRing extends the base
-ring with automatic failover: if the primary shard is unreachable, traffic is
-walked around the ring to the next healthy node.
+virtual nodes to smooth load distribution. ResilientShardRing preserves that
+mapping while exposing candidate failover shards so callers can retry only
+after a real Redis operation fails.
 """
 
 import bisect
 import hashlib
+import os
+import socket
 from typing import Tuple
 
-from redis import Redis, ConnectionError as RedisConnectionError, TimeoutError as RedisTimeoutError
+from flask import current_app, has_app_context
+from redis import Redis
 
 
 # More virtual nodes → smoother distribution but larger ring structure.
 # 150 per shard keeps the ring small while reducing max imbalance to ~5%.
 VIRTUAL_NODES = 150
+INSTANCE_ID = os.environ.get("HOSTNAME", socket.gethostname())
 
 
 class AllShardsDownError(Exception):
@@ -25,6 +29,18 @@ class AllShardsDownError(Exception):
 
 def _md5_int(key: str) -> int:
     return int(hashlib.md5(key.encode(), usedforsecurity=False).hexdigest(), 16)
+
+
+def _record_shard_failure(shard_id: str) -> None:
+    if not has_app_context() or not hasattr(current_app, "shard_failures"):
+        return
+    current_app.shard_failures.labels(shard_id, INSTANCE_ID).inc()
+
+
+def _record_shard_failover(from_shard: str, to_shard: str) -> None:
+    if not has_app_context() or not hasattr(current_app, "shard_failovers"):
+        return
+    current_app.shard_failovers.labels(from_shard, to_shard, INSTANCE_ID).inc()
 
 
 class ShardRing:
@@ -62,6 +78,10 @@ class ShardRing:
 
     def get_shard(self, key: str) -> Tuple[str, Redis]:
         """Return (shard_id, Redis client) for the given key."""
+        shard_id = self._primary_shard_id(key)
+        return shard_id, self._clients[shard_id]
+
+    def _primary_shard_id(self, key: str) -> str:
         if not self._sorted_keys:
             raise AllShardsDownError("Shard ring is empty")
 
@@ -69,8 +89,7 @@ class ShardRing:
         idx = bisect.bisect_left(self._sorted_keys, h)
         if idx >= len(self._sorted_keys):
             idx = 0  # wrap around
-        shard_id = self._ring[self._sorted_keys[idx]]
-        return shard_id, self._clients[shard_id]
+        return self._ring[self._sorted_keys[idx]]
 
     @property
     def shard_ids(self) -> list:
@@ -83,14 +102,14 @@ class ShardRing:
 
 class ResilientShardRing(ShardRing):
     """
-    ShardRing with automatic failover.
+    ShardRing with reactive failover helpers.
 
-    If the primary shard for a key is unreachable (ConnectionError or
-    TimeoutError), the ring walks clockwise to the next healthy shard.
-    Raises AllShardsDownError only when every shard has been tried.
+    The primary shard is returned immediately for the hot path. Callers can
+    request the remaining candidate shards and retry only when a real Redis
+    operation fails.
     """
 
-    def get_shard(self, key: str) -> Tuple[str, Redis]:
+    def get_failover_shards(self, key: str) -> list[Tuple[str, Redis]]:
         if not self._sorted_keys:
             raise AllShardsDownError("Shard ring is empty")
 
@@ -101,6 +120,7 @@ class ResilientShardRing(ShardRing):
 
         n = len(self._sorted_keys)
         seen_shards: set[str] = set()
+        candidates: list[Tuple[str, Redis]] = []
 
         for step in range(n):
             idx = (start_idx + step) % n
@@ -108,11 +128,14 @@ class ResilientShardRing(ShardRing):
             if shard_id in seen_shards:
                 continue
             seen_shards.add(shard_id)
-            client = self._clients[shard_id]
-            try:
-                client.ping()
-                return shard_id, client
-            except (RedisConnectionError, RedisTimeoutError):
-                continue  # try next shard
+            candidates.append((shard_id, self._clients[shard_id]))
 
-        raise AllShardsDownError("No healthy Redis shards available")
+        if not candidates:
+            raise AllShardsDownError("No healthy Redis shards available")
+        return candidates
+
+    def record_failure(self, shard_id: str) -> None:
+        _record_shard_failure(shard_id)
+
+    def record_failover(self, from_shard: str, to_shard: str) -> None:
+        _record_shard_failover(from_shard, to_shard)
