@@ -58,6 +58,13 @@ def test_create_event_rejects_non_object_details(client):
     assert "details" in response.get_json()["error"].lower()
 
 
+def test_create_event_rejects_non_object_request_body(client):
+    response = client.post("/events", json=["not", "a", "dict"])
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "JSON body must be an object"}
+
+
 def test_create_event_creates_row_and_returns_payload(integration_client):
     now = datetime(2026, 1, 1, 0, 0, 0)
     user = User.create(
@@ -91,6 +98,25 @@ def test_create_event_creates_row_and_returns_payload(integration_client):
     assert body["user_id"] == user.id
     assert body["event_type"] == "click"
     assert body["details"] == {"referrer": "https://google.com"}
+
+
+def test_create_event_rejects_inactive_url(integration_client):
+    now = datetime(2026, 1, 1, 0, 0, 0)
+    url = Url.create(
+        short_code="dead01",
+        original_url="https://example.com/inactive",
+        is_active=False,
+        created_at=now,
+        updated_at=now,
+    )
+
+    response = integration_client.post(
+        "/events",
+        json={"url_id": url.id, "event_type": "click"},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "URL is inactive"}
 
 
 def test_list_events_supports_filters(integration_client):

@@ -116,6 +116,8 @@ def create_event():
     url = Url.get_or_none(Url.id == payload["url_id"])
     if url is None:
         return jsonify(error="URL not found"), 404
+    if not url.is_active:
+        return jsonify(error="URL is inactive"), 400
 
     user_id = payload.get("user_id")
     if user_id is not None and User.get_or_none(User.id == user_id) is None:
