@@ -156,7 +156,7 @@ def get_click_stats(short_code: str, ring) -> dict:
             "click_counter.get_stats_failed",
             extra={"short_code": short_code, "error": str(exc)},
         )
-        return totals
+        return {"total_clicks": 0, "unique_visitors": 0, "hourly": {}}
 
     for shard_id, client in shard_clients:
         try:
